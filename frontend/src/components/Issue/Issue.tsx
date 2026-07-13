@@ -70,12 +70,32 @@ export default function Issue({
     }
 
     // Otherwise, perform fuzzy search
-    const filtered = products.filter(p => 
-      p.name.toLowerCase().includes(query) ||
-      p.barcode.toLowerCase().includes(query) ||
-      (p.ean && p.ean.toLowerCase().includes(query)) ||
-      (p.sku && p.sku.toLowerCase().includes(query))
-    ).slice(0, 5);
+    const fuzzyMatchWord = (text: string, queryWord: string): boolean => {
+      const t = text.toLowerCase();
+      const q = queryWord.toLowerCase();
+      let tIdx = 0;
+      let qIdx = 0;
+      while (tIdx < t.length && qIdx < q.length) {
+        if (t[tIdx] === q[qIdx]) {
+          qIdx++;
+        }
+        tIdx++;
+      }
+      return qIdx === q.length;
+    };
+
+    const words = query.split(/\s+/);
+    const filtered = products.filter(p => {
+      return words.every(word => {
+        const fields = [
+          p.name || '',
+          p.barcode || '',
+          p.ean || '',
+          p.sku || ''
+        ];
+        return fields.some(field => fuzzyMatchWord(field, word));
+      });
+    }).slice(0, 5);
 
     setSearchResults(filtered);
   }, [scanInput, products]);

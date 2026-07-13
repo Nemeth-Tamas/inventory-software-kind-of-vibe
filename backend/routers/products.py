@@ -48,15 +48,22 @@ async def list_products(
     
     # 2. Text Search
     if q:
-        search_filter = or_(
-            Product.name.ilike(f"%{q}%"),
-            Product.barcode.ilike(f"%{q}%"),
-            Product.ean.ilike(f"%{q}%"),
-            Product.sku.ilike(f"%{q}%"),
-            Product.manufacturer_sku.ilike(f"%{q}%"),
-            Product.billingo_product_id.ilike(f"%{q}%")
-        )
-        stmt = stmt.where(search_filter)
+        import re
+        words = q.split()
+        for word in words:
+            if not word:
+                continue
+            escaped_chars = [re.escape(c) for c in word]
+            pattern = ".*".join(escaped_chars)
+            word_filter = or_(
+                Product.name.op("~*")(pattern),
+                Product.barcode.op("~*")(pattern),
+                Product.ean.op("~*")(pattern),
+                Product.sku.op("~*")(pattern),
+                Product.manufacturer_sku.op("~*")(pattern),
+                Product.billingo_product_id.op("~*")(pattern)
+            )
+            stmt = stmt.where(word_filter)
         
     # 3. Category Filter
     if category_id:
