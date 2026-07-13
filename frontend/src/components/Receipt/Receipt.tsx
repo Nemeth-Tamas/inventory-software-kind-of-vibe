@@ -82,19 +82,22 @@ export default function Receipt({
       return;
     }
 
-    // Otherwise, perform fuzzy search
     const fuzzyMatchWord = (text: string, queryWord: string): boolean => {
       const t = text.toLowerCase();
       const q = queryWord.toLowerCase();
-      let tIdx = 0;
       let qIdx = 0;
-      while (tIdx < t.length && qIdx < q.length) {
-        if (t[tIdx] === q[qIdx]) {
+      let lastMatchIdx = -1;
+      for (let i = 0; i < t.length; i++) {
+        if (t[i] === q[qIdx]) {
+          if (qIdx > 0 && i - lastMatchIdx > 7) {
+            continue;
+          }
+          lastMatchIdx = i;
           qIdx++;
+          if (qIdx === q.length) return true;
         }
-        tIdx++;
       }
-      return qIdx === q.length;
+      return false;
     };
 
     const words = query.split(/\s+/);
@@ -566,7 +569,10 @@ export default function Receipt({
 
       {/* Unknown Barcode Options Modal */}
       {unknownBarcode && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setUnknownBarcode(null); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+        >
           <div className="glass-panel" style={{ padding: '24px', maxWidth: '450px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <AlertTriangle size={48} style={{ color: '#f59e0b', margin: '0 auto' }} />
             <h3 style={{ margin: 0, fontSize: '18px' }}>Ismeretlen vonalkód: {unknownBarcode}</h3>
@@ -610,7 +616,10 @@ export default function Receipt({
 
       {/* Quick Create Dialog */}
       {showQuickCreate && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 101 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowQuickCreate(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 101 }}
+        >
           <form onSubmit={handleQuickCreateSubmit} className="glass-panel" style={{ padding: '24px', width: '500px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ margin: 0 }}>Új termék gyors felvétele</h3>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>
@@ -659,7 +668,10 @@ export default function Receipt({
 
       {/* Link Product Dialog */}
       {showLinkProduct && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 101 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowLinkProduct(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 101 }}
+        >
           <div className="glass-panel" style={{ padding: '24px', width: '500px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ margin: 0 }}>Összekapcsolás meglévő termékkel</h3>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>

@@ -69,19 +69,22 @@ export default function Issue({
       return;
     }
 
-    // Otherwise, perform fuzzy search
     const fuzzyMatchWord = (text: string, queryWord: string): boolean => {
       const t = text.toLowerCase();
       const q = queryWord.toLowerCase();
-      let tIdx = 0;
       let qIdx = 0;
-      while (tIdx < t.length && qIdx < q.length) {
-        if (t[tIdx] === q[qIdx]) {
+      let lastMatchIdx = -1;
+      for (let i = 0; i < t.length; i++) {
+        if (t[i] === q[qIdx]) {
+          if (qIdx > 0 && i - lastMatchIdx > 7) {
+            continue;
+          }
+          lastMatchIdx = i;
           qIdx++;
+          if (qIdx === q.length) return true;
         }
-        tIdx++;
       }
-      return qIdx === q.length;
+      return false;
     };
 
     const words = query.split(/\s+/);

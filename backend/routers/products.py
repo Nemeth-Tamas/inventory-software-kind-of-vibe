@@ -54,7 +54,7 @@ async def list_products(
             if not word:
                 continue
             escaped_chars = [re.escape(c) for c in word]
-            pattern = ".*".join(escaped_chars)
+            pattern = ".{0,6}".join(escaped_chars)
             word_filter = or_(
                 Product.name.op("~*")(pattern),
                 Product.barcode.op("~*")(pattern),

@@ -883,7 +883,10 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
 
             {/* Merge Modal */}
             {showCatMergeModal && (
-              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+              <div 
+                onClick={e => { if (e.target === e.currentTarget) setShowCatMergeModal(false); }}
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+              >
                 <form onSubmit={handleMergeCategories} className="glass-panel" style={{ padding: '24px', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <h3 style={{ margin: 0 }}>Kategóriák összevonása</h3>
                   <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
@@ -1101,7 +1104,10 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
 
             {/* Supplier Edit/Reporting Dialog */}
             {editingSupplier && (
-              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+              <div 
+                onClick={e => { if (e.target === e.currentTarget) setEditingSupplier(null); }}
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+              >
                 <div className="glass-panel" style={{ padding: '24px', width: '700px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0 }}>Beszállító részletei & Szerkesztés</h3>

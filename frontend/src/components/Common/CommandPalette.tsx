@@ -52,7 +52,10 @@ export default function CommandPalette({ isOpen, onClose, products, onSelectProd
   if (!isOpen) return null;
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', paddingTop: '100px', zIndex: 1000 }}>
+    <div 
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', paddingTop: '100px', zIndex: 1000 }}
+    >
       <div className="glass-panel" style={{ width: '600px', height: 'fit-content', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '16px', borderBottom: '1px solid #1e293b' }}>
           <Search size={20} color="#94a3b8" style={{ marginRight: '12px' }} />

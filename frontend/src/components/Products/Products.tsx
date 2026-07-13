@@ -599,7 +599,10 @@ export default function Products({ token, categories, locations, suppliers, fetc
       </div>
 
       {showAddProduct && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 100, overflowY: 'auto', padding: '40px 20px' }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowAddProduct(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 100, overflowY: 'auto', padding: '40px 20px' }}
+        >
           <form onSubmit={handleCreateProduct} className="glass-panel" style={{ padding: '24px', width: '600px', display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'visible' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Új termék felvitele</h3>
@@ -843,7 +846,10 @@ export default function Products({ token, categories, locations, suppliers, fetc
       )}
 
       {editingProduct && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 100, overflowY: 'auto', padding: '40px 20px' }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setEditingProduct(null); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 100, overflowY: 'auto', padding: '40px 20px' }}
+        >
           <form onSubmit={handleSaveEdit} className="glass-panel" style={{ padding: '24px', width: '600px', display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'visible' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Termék szerkesztése: {editingProduct.name}</h3>
@@ -1057,7 +1063,10 @@ export default function Products({ token, categories, locations, suppliers, fetc
 
       {/* Inline Quick Add Category Modal */}
       {showAddCategoryModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 150 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowAddCategoryModal(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 150 }}
+        >
           <form onSubmit={handleQuickAddCategory} className="glass-panel" style={{ padding: '24px', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ margin: 0 }}>Új kategória felvétele</h3>
             <div>
@@ -1074,7 +1083,10 @@ export default function Products({ token, categories, locations, suppliers, fetc
 
       {/* Inline Quick Add Supplier Modal */}
       {showAddSupplierModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 150 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowAddSupplierModal(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 150 }}
+        >
           <form onSubmit={handleQuickAddSupplier} className="glass-panel" style={{ padding: '24px', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ margin: 0 }}>Új beszállító felvétele</h3>
             <div>
@@ -1343,7 +1355,10 @@ export default function Products({ token, categories, locations, suppliers, fetc
 
       {/* Product Detail Modal */}
       {selectedProduct && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 140 }}>
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setSelectedProduct(null); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 140 }}
+        >
           <div className="glass-panel" style={{ padding: '24px', width: '600px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0, color: '#38bdf8' }}>Termék Részletes Adatai</h3>

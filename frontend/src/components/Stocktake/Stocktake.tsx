@@ -584,7 +584,10 @@ export default function Stocktake({
 
           {/* Apply Corrections confirmation dialog */}
           {showApplyCorrectionDialog && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+            <div 
+              onClick={e => { if (e.target === e.currentTarget) setShowApplyCorrectionDialog(false); }}
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+            >
               <div className="glass-panel" style={{ padding: '32px', width: '500px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, color: '#f59e0b' }}>Leltárkorrekció végrehajtása</h3>
@@ -683,7 +686,10 @@ export default function Stocktake({
 
           {/* Link Modal Overlay */}
           {selectedScanToLink && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+            <div 
+              onClick={e => { if (e.target === e.currentTarget) setSelectedScanToLink(null); }}
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 }}
+            >
               <div className="glass-panel" style={{ padding: '24px', width: '450px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0 }}>Vonalkód összekapcsolása</h3>
