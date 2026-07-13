@@ -1,0 +1,14 @@
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+
+  backend:
+    environment:
+      - APP_ENV=development
+      - ALLOW_MOCK_BILLINGO=${ALLOW_MOCK_BILLINGO:-true}
+      - ALLOW_SEEDING=${ALLOW_SEEDING:-true}

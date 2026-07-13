@@ -49,3 +49,45 @@ async def test_unsafe_restore_protection():
          patch("backup_manager.verify_backup_file", return_value=(True, None)):
         with pytest.raises(SystemExit):
             await run_restore_live("inventory_2026-07-13_084454.dump", confirm=False)
+
+def test_sanitize_and_validate_backup_filename():
+    from backup_manager import sanitize_and_validate_backup_filename
+    
+    # Valid filenames
+    assert sanitize_and_validate_backup_filename("inventory_2026-07-13_020000.dump").endswith("inventory_2026-07-13_020000.dump")
+    assert sanitize_and_validate_backup_filename("safety_inventory_2026-07-13_120000.dump").endswith("safety_inventory_2026-07-13_120000.dump")
+
+    # Invalid extensions
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("inventory_2026-07-13_020000.txt")
+        
+    # Invalid patterns
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("random_file.dump")
+
+    # Path traversal attempts
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("../escape.dump")
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("subdir/inventory_2026-07-13_020000.dump")
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("/absolute/path/inventory_2026-07-13_020000.dump")
+    with pytest.raises(ValueError):
+        sanitize_and_validate_backup_filename("C:\\inventory_2026-07-13_020000.dump")
+
+
+def test_catch_up_logic():
+    from backup_manager import check_daily_backup_exists_for_date
+    
+    mock_files = [
+        "inventory_2026-07-10_020000.dump",
+        "safety_inventory_2026-07-11_120000.dump",
+    ]
+    
+    with patch("os.listdir", return_value=mock_files), \
+         patch("os.path.exists", return_value=True):
+         
+        assert check_daily_backup_exists_for_date("2026-07-10") is True
+        assert check_daily_backup_exists_for_date("2026-07-11") is False
+        assert check_daily_backup_exists_for_date("2026-07-12") is False
+

@@ -1,19 +1,34 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from barcode_utils import generate_next_barcode
-from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, master_data, products, inventory, stocktake, billingo, excel, audit, events, seed, settings
+from routers import auth, master_data, products, inventory, stocktake, billingo, excel, audit, events, seed, settings as settings_router, health
 
 app = FastAPI(title="Raktárkezelő API", version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from config import settings
+
+# CORS middleware configuration
+origins = []
+if settings.CORS_ALLOWED_ORIGINS:
+    origins = [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
+elif settings.APP_ENV == "development":
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:18080",
+        "http://127.0.0.1:18080"
+    ]
+
+if origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Include modular routers
 app.include_router(auth.router)
@@ -25,22 +40,12 @@ app.include_router(billingo.router)
 app.include_router(excel.router)
 app.include_router(audit.router)
 app.include_router(events.router)
-app.include_router(settings.router)
+app.include_router(settings_router.router)
 app.include_router(seed.router)
+app.include_router(health.router)
 
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "system": "Raktárkezelő API"}
 
-@app.post("/api/products/generate-barcode")
-async def get_barcode(db: AsyncSession = Depends(get_db)):
-    try:
-        barcode = await generate_next_barcode(db)
-        await db.commit()
-        return {"barcode": barcode}
-    except ValueError as e:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Szerver hiba: {str(e)}")
+

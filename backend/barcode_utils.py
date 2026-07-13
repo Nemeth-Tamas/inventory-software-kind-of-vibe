@@ -42,3 +42,29 @@ async def generate_next_barcode(db: AsyncSession, exclude_barcodes: Optional[set
         if not exists_result.scalar():
             await db.flush()
             return barcode
+
+async def get_next_barcode_preview(db: AsyncSession) -> str:
+    tz = pytz.timezone("Europe/Budapest")
+    now_local = datetime.now(tz)
+    year_prefix = int(str(now_local.year)[2:])
+    
+    result = await db.execute(
+        select(BarcodeSequence).where(BarcodeSequence.year == year_prefix)
+    )
+    seq = result.scalar_one_or_none()
+    counter = seq.current_counter if seq else 0
+    
+    from models import Product
+    while True:
+        counter += 1
+        if counter > 0xFFFF:
+            raise ValueError("A vonalkód tartomány megtelt ebben az évben! (Elérte a FFFF értéket)")
+            
+        hex_str = f"{counter:04X}"
+        barcode = f"{year_prefix}{hex_str}"
+        
+        exists_result = await db.execute(
+            select(Product.id).where(Product.barcode == barcode)
+        )
+        if not exists_result.scalar():
+            return barcode

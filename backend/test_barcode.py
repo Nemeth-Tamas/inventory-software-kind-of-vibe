@@ -58,3 +58,92 @@ async def test_barcode_exhausted():
     with pytest.raises(ValueError) as excinfo:
         await generate_next_barcode(db)
     assert "megtelt" in str(excinfo.value)
+
+
+from barcode_utils import get_next_barcode_preview
+
+@pytest.mark.asyncio
+async def test_barcode_preview_no_burn():
+    db = MockDB()
+    barcode1 = await get_next_barcode_preview(db)
+    assert barcode1 == "260001"
+    assert db.seq is None
+    
+    db.seq = BarcodeSequence(year=26, current_counter=42)
+    barcode2 = await get_next_barcode_preview(db)
+    assert barcode2 == "26002B"
+    assert db.seq.current_counter == 42
+    
+    actual_barcode = await generate_next_barcode(db)
+    assert actual_barcode == "26002B"
+    assert db.seq.current_counter == 43
+
+
+from main import app
+from database import AsyncSessionLocal
+from models import User, UserRole, AuditLog
+from auth import get_password_hash
+from sqlalchemy import delete
+import httpx
+
+@pytest.mark.anyio
+async def test_barcode_endpoint_security_and_preview():
+    async with AsyncSessionLocal() as session:
+        await session.execute(delete(AuditLog).where(AuditLog.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
+        await session.execute(delete(User).where(User.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
+        
+        admin = User(
+            username="barcode_admin",
+            hashed_password=get_password_hash("admin123"),
+            role=UserRole.ADMIN,
+            is_active=True,
+            must_change_password=False
+        )
+        unauth = User(
+            username="barcode_unauth",
+            hashed_password=get_password_hash("unauth123"),
+            role=UserRole.VIEWER,
+            is_active=True,
+            must_change_password=False
+        )
+        warehouse = User(
+            username="barcode_warehouse",
+            hashed_password=get_password_hash("wh123"),
+            role=UserRole.WAREHOUSE,
+            is_active=True,
+            must_change_password=False
+        )
+        session.add_all([admin, unauth, warehouse])
+        await session.commit()
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver/api") as client:
+            resp = await client.post("/products/generate-barcode")
+            assert resp.status_code == 401
+
+            login_unauth = await client.post("/auth/login", data={"username": "barcode_unauth", "password": "unauth123"})
+            assert login_unauth.status_code == 200
+            unauth_token = login_unauth.json()["access_token"]
+            
+            login_wh = await client.post("/auth/login", data={"username": "barcode_warehouse", "password": "wh123"})
+            assert login_wh.status_code == 200
+            wh_token = login_wh.json()["access_token"]
+
+            resp = await client.post("/products/generate-barcode", headers={"Authorization": f"Bearer {unauth_token}"})
+            assert resp.status_code == 403
+
+            resp1 = await client.post("/products/generate-barcode", headers={"Authorization": f"Bearer {wh_token}"})
+            assert resp1.status_code == 200
+            code1 = resp1.json()["barcode"]
+
+            resp2 = await client.post("/products/generate-barcode", headers={"Authorization": f"Bearer {wh_token}"})
+            assert resp2.status_code == 200
+            code2 = resp2.json()["barcode"]
+            assert code1 == code2
+
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(AuditLog).where(AuditLog.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
+            await session.execute(delete(User).where(User.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
+            await session.commit()
+

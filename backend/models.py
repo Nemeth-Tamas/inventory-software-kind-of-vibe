@@ -2,7 +2,7 @@ import enum
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
@@ -105,7 +105,7 @@ class AuditLog(Base):
     username = Column(String)
     action = Column(String, nullable=False)
     details = Column(String)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     user = relationship("User")
 

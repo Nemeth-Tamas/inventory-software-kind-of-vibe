@@ -13,6 +13,20 @@ import math
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
+@router.post("/generate-barcode")
+async def get_barcode(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER, UserRole.WAREHOUSE]))
+):
+    try:
+        from barcode_utils import get_next_barcode_preview
+        barcode = await get_next_barcode_preview(db)
+        return {"barcode": barcode}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Szerver hiba: {str(e)}")
+
 def calculate_gross(net: int, vat_rate: int) -> int:
     net_dec = Decimal(net)
     vat_dec = Decimal(vat_rate)

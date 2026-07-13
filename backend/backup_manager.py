@@ -49,7 +49,6 @@ def get_disk_free_space():
         return 0
 
 def acquire_lock():
-    # Simple cross-platform file locking using exclusive opening or fcntl
     try:
         import fcntl
         f = open(LOCK_FILE, "w")
@@ -95,7 +94,6 @@ def verify_backup_file(filepath):
     if os.path.getsize(filepath) == 0:
         return False, "File is empty"
     
-    # Run pg_restore --list
     env = os.environ.copy()
     env["PGPASSWORD"] = DB_CREDS["password"]
     cmd = ["pg_restore", "--list", filepath]
@@ -108,7 +106,65 @@ def verify_backup_file(filepath):
     
     return True, None
 
-def run_backup_sync(is_safety=False):
+def get_latest_backup_filename():
+    if not os.path.exists(BACKUP_DIR):
+        return None
+    files = os.listdir(BACKUP_DIR)
+    pattern = re.compile(r"^(inventory|safety_inventory)_\d{4}-\d{2}-\d{2}_\d{6}\.dump$")
+    backup_files = [f for f in files if pattern.match(f)]
+    if not backup_files:
+        return None
+    backup_files.sort()
+    return backup_files[-1]
+
+def check_daily_backup_exists_for_date(date_str: str) -> bool:
+    """
+    Checks if a successful scheduled/daily backup exists on disk for the given YYYY-MM-DD date.
+    """
+    if not os.path.exists(BACKUP_DIR):
+        return False
+    try:
+        files = os.listdir(BACKUP_DIR)
+        pattern = re.compile(r"^inventory_(\d{4}-\d{2}-\d{2})_\d{6}\.dump$")
+        for f in files:
+            match = pattern.match(f)
+            if match and match.group(1) == date_str:
+                return True
+    except Exception:
+        pass
+    return False
+
+def sanitize_and_validate_backup_filename(filename: str) -> str:
+    """
+    Validates that the filename:
+    - is a simple basename (no path separators, no absolute path, no traversal)
+    - matches expected backup patterns:
+      inventory_YYYY-MM-DD_HHMMSS.dump
+      safety_inventory_YYYY-MM-DD_HHMMSS.dump
+    - resolved path is strictly inside BACKUP_DIR
+    """
+    if not filename:
+        raise ValueError("Backup filename must not be empty.")
+    
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise ValueError("Invalid backup filename: path traversal or directory components are not allowed.")
+    
+    basename = os.path.basename(filename)
+    if basename != filename:
+        raise ValueError("Invalid backup filename: only basenames are allowed.")
+    
+    pattern = re.compile(r"^(inventory|safety_inventory)_\d{4}-\d{2}-\d{2}_\d{6}\.dump$")
+    if not pattern.match(filename):
+        raise ValueError("Invalid backup filename: name does not match expected patterns (e.g. inventory_YYYY-MM-DD_HHMMSS.dump).")
+    
+    resolved_dir = os.path.abspath(BACKUP_DIR)
+    resolved_filepath = os.path.abspath(os.path.join(resolved_dir, filename))
+    if not resolved_filepath.startswith(resolved_dir):
+        raise ValueError("Invalid backup filename: path escapes backup directory.")
+        
+    return resolved_filepath
+
+def run_backup_sync(backup_type="manual"):
     os.makedirs(BACKUP_DIR, exist_ok=True)
     lock = acquire_lock()
     if not lock:
@@ -116,6 +172,7 @@ def run_backup_sync(is_safety=False):
         sys.exit(1)
         
     start_time = datetime.now(TZ)
+    is_safety = (backup_type == "safety")
     prefix = "safety_inventory" if is_safety else "inventory"
     timestamp_str = start_time.strftime("%Y-%m-%d_%H%M%S")
     final_filename = f"{prefix}_{timestamp_str}.dump"
@@ -127,7 +184,6 @@ def run_backup_sync(is_safety=False):
     file_size = 0
     
     try:
-        # Run pg_dump
         env = os.environ.copy()
         env["PGPASSWORD"] = DB_CREDS["password"]
         cmd = [
@@ -140,16 +196,15 @@ def run_backup_sync(is_safety=False):
             "-f", temp_path
         ]
         
+        # subprocess.run handles the credentials securely without exposing them in stderr output
         res = subprocess.run(cmd, env=env, capture_output=True, text=True)
         if res.returncode != 0:
-            raise Exception(f"pg_dump failed with exit code {res.returncode}: {res.stderr.strip()}")
+            raise Exception(f"pg_dump failed with exit code {res.returncode}")
             
-        # Verify backup
         is_ok, ver_err = verify_backup_file(temp_path)
         if not is_ok:
             raise Exception(ver_err)
             
-        # Atomic rename
         os.rename(temp_path, final_path)
         file_size = os.path.getsize(final_path)
         success = True
@@ -166,14 +221,14 @@ def run_backup_sync(is_safety=False):
         end_time = datetime.now(TZ)
         release_lock(lock)
         
-    # Log to history
     log_entry = {
         "start_time": start_time.isoformat(),
         "completion_time": end_time.isoformat(),
         "filename": final_filename if success else None,
         "size": file_size if success else 0,
         "result": "success" if success else "failed",
-        "error": error_msg
+        "error": error_msg,
+        "backup_type": backup_type
     }
     
     history = []
@@ -185,7 +240,6 @@ def run_backup_sync(is_safety=False):
             pass
             
     history.append(log_entry)
-    # Keep last 50 entries in log history
     history = history[-50:]
     try:
         with open(HISTORY_FILE, "w") as f:
@@ -193,11 +247,9 @@ def run_backup_sync(is_safety=False):
     except Exception:
         pass
         
-    # Rotate backups (Keep newest 30 daily backups, ignore safety ones, do not delete newest even if cleanup errors)
     if success and not is_safety:
         rotate_backups(final_filename)
         
-    # Update status file
     update_status_file(success, log_entry, start_time)
     
     return success, final_filename if success else error_msg
@@ -207,13 +259,11 @@ def rotate_backups(newest_filename):
         files = os.listdir(BACKUP_DIR)
         pattern = re.compile(r"^inventory_\d{4}-\d{2}-\d{2}_\d{6}\.dump$")
         backup_files = [f for f in files if pattern.match(f)]
-        backup_files.sort() # alphabetical is chronological here
+        backup_files.sort()
         
-        # We must keep newest_filename, and we keep at most 30 files
         if len(backup_files) > 30:
             to_delete = backup_files[:-30]
             for f in to_delete:
-                # Never delete the newest successful backup
                 if f == newest_filename:
                     continue
                 try:
@@ -225,7 +275,6 @@ def rotate_backups(newest_filename):
         print(f"Rotation error: {e}")
 
 def update_status_file(success, log_entry, timestamp):
-    # Fetch last successful from history
     last_success = None
     try:
         if os.path.exists(HISTORY_FILE):
@@ -291,17 +340,27 @@ def list_backups():
         mtime = datetime.fromtimestamp(os.path.getctime(path), TZ).isoformat()
         print(f" - {f} ({size} bytes, created: {mtime})")
 
-async def verify_command(filename):
-    filepath = os.path.join(BACKUP_DIR, filename)
+async def verify_command(filename, latest=False):
+    if latest:
+        filename = get_latest_backup_filename()
+        if not filename:
+            print("Error: No backup files found to verify.")
+            sys.exit(1)
+        print(f"Selecting latest backup file: {filename}")
+        
+    try:
+        filepath = sanitize_and_validate_backup_filename(filename)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+        
     is_ok, err = verify_backup_file(filepath)
     if is_ok:
         print(f"Backup {filename} is VALID.")
-        # Extract headers / listing
         env = os.environ.copy()
         env["PGPASSWORD"] = DB_CREDS["password"]
         cmd = ["pg_restore", "--list", filepath]
         res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-        # print first 15 lines of listing
         lines = res.stdout.splitlines()[:15]
         print("Backup Contents Summary:")
         for l in lines:
@@ -312,10 +371,18 @@ async def verify_command(filename):
         print(f"Backup {filename} is INVALID. Reason: {err}")
         sys.exit(1)
 
-async def run_restore_temp(filename):
-    filepath = os.path.join(BACKUP_DIR, filename)
-    if not os.path.exists(filepath):
-        print(f"Error: Backup file {filename} does not exist.")
+async def run_restore_temp(filename, latest=False):
+    if latest:
+        filename = get_latest_backup_filename()
+        if not filename:
+            print("Error: No backup files found to restore.")
+            sys.exit(1)
+        print(f"Selecting latest backup file: {filename}")
+
+    try:
+        filepath = sanitize_and_validate_backup_filename(filename)
+    except ValueError as e:
+        print(f"Error: {e}")
         sys.exit(1)
         
     is_ok, err = verify_backup_file(filepath)
@@ -326,7 +393,6 @@ async def run_restore_temp(filename):
     temp_db_name = "inventory_verification_temp"
     print(f"Restoring backup {filename} into temporary verification database: {temp_db_name}...")
     
-    # 1. Create DB
     conn = await asyncpg.connect(
         user=DB_CREDS["user"],
         password=DB_CREDS["password"],
@@ -335,14 +401,12 @@ async def run_restore_temp(filename):
         port=DB_CREDS["port"]
     )
     try:
-        # Terminate any existing connections to verification db
         await conn.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", temp_db_name)
         await conn.execute(f"DROP DATABASE IF EXISTS {temp_db_name}")
         await conn.execute(f"CREATE DATABASE {temp_db_name} OWNER {DB_CREDS['user']}")
     finally:
         await conn.close()
         
-    # 2. Run pg_restore
     env = os.environ.copy()
     env["PGPASSWORD"] = DB_CREDS["password"]
     cmd = [
@@ -357,10 +421,7 @@ async def run_restore_temp(filename):
     
     print("Running pg_restore...")
     res = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    # pg_restore often outputs warnings about roles or privileges which are fine, but exit code 0/1 is key.
-    # Postgres users/roles might differ slightly, but we check if we can query tables
     
-    # 3. Verify Tables & Row Counts
     print("Connecting to temporary database to verify schema and contents...")
     success = False
     v_error = None
@@ -377,7 +438,6 @@ async def run_restore_temp(filename):
             port=DB_CREDS["port"]
         )
         try:
-            # Check alembic_version table
             tables = [r["table_name"] for r in await v_conn.fetch(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
             )]
@@ -402,7 +462,6 @@ async def run_restore_temp(filename):
         v_error = str(e)
         print(f"Verification queries failed: {v_error}")
     finally:
-        # 4. Clean up temp DB
         print(f"Destroying temporary verification database {temp_db_name}...")
         conn = await asyncpg.connect(
             user=DB_CREDS["user"],
@@ -417,7 +476,6 @@ async def run_restore_temp(filename):
         finally:
             await conn.close()
             
-    # Record verification in log
     ver_log = {
         "timestamp": datetime.now(TZ).isoformat(),
         "backup_file": filename,
@@ -453,7 +511,12 @@ async def run_restore_live(filename, confirm):
         print("Error: No backup filename supplied.")
         sys.exit(1)
         
-    filepath = os.path.join(BACKUP_DIR, filename)
+    try:
+        filepath = sanitize_and_validate_backup_filename(filename)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+        
     if not os.path.exists(filepath):
         print(f"Error: Backup file {filename} does not exist.")
         sys.exit(1)
@@ -474,15 +537,13 @@ async def run_restore_live(filename, confirm):
         print("Error: Live restore requires explicit confirmation. Add the --confirm flag.")
         sys.exit(1)
         
-    # 1. Create safety backup first
     print("Creating safety backup of the current database before restore...")
-    safety_ok, safety_file = run_backup_sync(is_safety=True)
+    safety_ok, safety_file = run_backup_sync(backup_type="safety")
     if not safety_ok:
         print(f"Error: Safety backup failed ({safety_file}). Live restore aborted for safety.")
         sys.exit(1)
     print(f"Safety backup created successfully: {safety_file}")
     
-    # 2. Stop application writes by disconnecting users and revoking connect privileges
     print("Stopping application database writes and disconnecting active users...")
     conn = await asyncpg.connect(
         user=DB_CREDS["user"],
@@ -492,23 +553,19 @@ async def run_restore_live(filename, confirm):
         port=DB_CREDS["port"]
     )
     try:
-        # Revoke connect on database inventory
         await conn.execute(f"REVOKE CONNECT ON DATABASE {target_db} FROM public")
         await conn.execute(f"REVOKE CONNECT ON DATABASE {target_db} FROM {DB_CREDS['user']}")
-        # Terminate all existing backend/worker connections
         await conn.execute(
             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
             target_db
         )
         
-        # 3. Drop and recreate database to ensure completely clean state
         print(f"Dropping and recreating database {target_db}...")
         await conn.execute(f"DROP DATABASE IF EXISTS {target_db}")
         await conn.execute(f"CREATE DATABASE {target_db} OWNER {DB_CREDS['user']}")
     finally:
         await conn.close()
         
-    # 4. Restore using pg_restore
     print(f"Restoring {filename} into {target_db}...")
     env = os.environ.copy()
     env["PGPASSWORD"] = DB_CREDS["password"]
@@ -524,7 +581,6 @@ async def run_restore_live(filename, confirm):
     
     res = subprocess.run(cmd, env=env, capture_output=True, text=True)
     
-    # 5. Restore connection privileges
     print("Re-enabling database connect privileges...")
     conn = await asyncpg.connect(
         user=DB_CREDS["user"],
@@ -547,7 +603,6 @@ def run_daemon():
     print("Scheduling daily backup at 02:00 Europe/Budapest timezone.")
     
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    # Write initial status
     try:
         if not os.path.exists(STATUS_FILE):
             status = {
@@ -564,8 +619,6 @@ def run_daemon():
     except Exception:
         pass
         
-    last_run_date = None
-    # Add a health indicator file
     health_file = "/tmp/backup_healthy"
     try:
         with open(health_file, "w") as hf:
@@ -573,19 +626,21 @@ def run_daemon():
     except Exception:
         pass
         
+    print("Daemon startup check completed. Catch-up evaluation active.")
+    
     while True:
         try:
             now_local = datetime.now(TZ)
-            # Update health file touch time
             if os.path.exists(health_file):
                 os.utime(health_file, None)
                 
-            if now_local.hour == 2 and now_local.minute == 0:
-                today_str = now_local.strftime("%Y-%m-%d")
-                if last_run_date != today_str:
-                    print(f"Triggering scheduled daily backup at {now_local.isoformat()}...")
-                    run_backup_sync()
-                    last_run_date = today_str
+            today_str = now_local.strftime("%Y-%m-%d")
+            
+            # Catch-up daily backup logic: if we are at or after 02:00
+            if now_local.hour >= 2:
+                if not check_daily_backup_exists_for_date(today_str):
+                    print(f"Daily backup not found for date {today_str}. Running scheduled backup...")
+                    run_backup_sync(backup_type="scheduled")
         except Exception as e:
             print(f"Error in daemon loop: {e}")
             
@@ -595,40 +650,39 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inventory System Backup and Restore Utility")
     subparsers = parser.add_subparsers(dest="command", required=True)
     
-    # run-backup
     subparsers.add_parser("run-backup", help="Run a manual database backup")
-    
-    # list-backups
     subparsers.add_parser("list-backups", help="List all available backups")
     
-    # verify-backup
     verify_p = subparsers.add_parser("verify-backup", help="Verify a backup file structure")
-    verify_p.add_argument("filename", help="Backup filename to verify")
+    verify_p.add_argument("filename", nargs="?", default=None, help="Backup filename to verify")
+    verify_p.add_argument("--latest", action="store_true", help="Verify the latest successful backup")
     
-    # restore-temp
     rest_temp_p = subparsers.add_parser("restore-temp", help="Restore backup into temporary database for validation")
-    rest_temp_p.add_argument("filename", help="Backup filename to verify restore on")
+    rest_temp_p.add_argument("filename", nargs="?", default=None, help="Backup filename to verify restore on")
+    rest_temp_p.add_argument("--latest", action="store_true", help="Restore the latest successful backup")
     
-    # restore-live
     rest_live_p = subparsers.add_parser("restore-live", help="Restore backup to live database")
     rest_live_p.add_argument("filename", help="Backup filename to restore")
     rest_live_p.add_argument("--confirm", action="store_true", help="Explicit confirmation for live overwrite")
     
-    # daemon
     subparsers.add_parser("daemon", help="Run automated backup scheduler daemon")
     
     args = parser.parse_args()
     
     if args.command == "run-backup":
-        success, fn = run_backup_sync()
+        success, fn = run_backup_sync(backup_type="manual")
         if not success:
             sys.exit(1)
     elif args.command == "list-backups":
         list_backups()
     elif args.command == "verify-backup":
-        asyncio.run(verify_command(args.filename))
+        if not args.filename and not args.latest:
+            parser.error("verify-backup requires either a filename or the --latest flag.")
+        asyncio.run(verify_command(args.filename, args.latest))
     elif args.command == "restore-temp":
-        asyncio.run(run_restore_temp(args.filename))
+        if not args.filename and not args.latest:
+            parser.error("restore-temp requires either a filename or the --latest flag.")
+        asyncio.run(run_restore_temp(args.filename, args.latest))
     elif args.command == "restore-live":
         asyncio.run(run_restore_live(args.filename, args.confirm))
     elif args.command == "daemon":

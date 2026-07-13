@@ -4,29 +4,32 @@ from models import User, UserRole, Category, Supplier, Location
 from database import AsyncSessionLocal
 from auth import get_password_hash
 from sqlalchemy import select
+from config import settings
 
 async def init_database():
-    admin_username = os.getenv("ADMIN_USER", "admin")
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    admin_username = settings.ADMIN_USER
+    admin_password = settings.ADMIN_PASSWORD
     
-    # If using default admin password, force password change on first run
+    # Force password change if default admin username/password is used (only in development)
     must_change = (admin_username == "admin" and admin_password == "admin123")
     
     async with AsyncSessionLocal() as session:
-        # Check if default admin exists
-        result = await session.execute(select(User).where(User.username == admin_username))
-        admin = result.scalar_one_or_none()
+        # Check if any admin exists in the database
+        result = await session.execute(select(User).where(User.role == UserRole.ADMIN))
+        existing_admin = result.scalars().first()
         
-        if not admin:
+        if existing_admin:
+            print(f"Initial admin setup skipped: An administrator already exists (e.g. '{existing_admin.username}').")
+        else:
             admin = User(
                 username=admin_username,
                 hashed_password=get_password_hash(admin_password),
                 role=UserRole.ADMIN,
                 is_active=True,
-                must_change_password=must_change
+                must_change_password=True  # Force change on first login for safety
             )
             session.add(admin)
-            print(f"Admin user '{admin_username}' created. Force password change: {must_change}")
+            print(f"Initial admin user '{admin_username}' created successfully. Password change forced on next login.")
             
         # Create default locations if empty
         locs_result = await session.execute(select(Location))

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 from models import UserRole
@@ -18,6 +18,15 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole
 
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    role: UserRole
+    is_active: bool
+    must_change_password: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
 # Category schemas
 class CategoryBase(BaseModel):
     name: str
@@ -25,8 +34,8 @@ class CategoryBase(BaseModel):
 class CategoryResponse(CategoryBase):
     id: str
     is_archived: bool
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 # Location schemas
 class LocationBase(BaseModel):
@@ -35,8 +44,8 @@ class LocationBase(BaseModel):
 class LocationResponse(LocationBase):
     id: str
     is_archived: bool
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 # Supplier schemas
 class SupplierBase(BaseModel):
@@ -54,8 +63,8 @@ class SupplierBase(BaseModel):
 class SupplierResponse(SupplierBase):
     id: str
     is_archived: bool
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class MergeRequest(BaseModel):
     source_id: str
@@ -113,8 +122,7 @@ class ProductResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Stocktake schemas
 class StocktakeCreate(BaseModel):
@@ -127,8 +135,8 @@ class StocktakeResponse(BaseModel):
     status: str
     created_at: datetime
     notes: Optional[str] = None
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 class StocktakeItemResponse(BaseModel):
     id: str
@@ -139,5 +147,5 @@ class StocktakeItemResponse(BaseModel):
     counted_qty: int
     difference: int
     note: Optional[str] = None
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)

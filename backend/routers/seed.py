@@ -8,13 +8,13 @@ from audit_logger import log_audit
 
 from models import User, UserRole
 from auth import require_role
-import os
+from config import settings
 
 router = APIRouter(prefix="/api/seed", tags=["seed"])
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def seed_development_data(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role([UserRole.ADMIN]))):
-    if os.getenv("ALLOW_SEEDING") != "true":
+    if not settings.ALLOW_SEEDING:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="A demo adatok betöltése le van tiltva ebben a környezetben!"

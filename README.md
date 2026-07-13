@@ -1,5 +1,7 @@
 # Raktárkezelő és Leltár Rendszer (Inventory & Stocktake System)
 
+Aktívan fejlesztett, saját használatra készült raktárkezelő rendszer.
+
 Ez a projekt egy produkcióra kész, Docker-alapú, magyar nyelvű raktárkezelő, vonalkód-olvasó barát és leltározó webalkalmazás, amelyet kis elektronikai és számítástechnikai szervizek számára terveztünk.
 
 ## 1. Rendszerarchitektúra és Portok
@@ -9,14 +11,14 @@ Az alkalmazás egy modern monorepo felépítést követ:
 * **Frontend**: React + TypeScript + Vite, gyorsbillentyű-vezérelt (Ctrl+K), valós idejű SSE frissítésekkel.
 * **Fordított Proxy**: Nginx Proxy Manager mögé helyezhető portátirányítással.
 
-A gazdagépen (host) használt egyedi portok az ütközések elkerülése végett:
+A gazdagépen (host) használt egyedi portok az-üzemi környezet biztonsága érdekében elrejtettek (nincsenek publikusan kitéve):
 
 | Szolgáltatás | Konténer Port | Gazdagép (Host) Port |
 | :--- | :--- | :--- |
 | **Frontend (React)** | 80 | **18080** |
 | **Backend (FastAPI)** | 18000 | **18000** |
-| **PostgreSQL** | 5432 | **15432** (Csak belső hálózat) |
-| **Redis** | 6379 | **16379** (Csak belső hálózat) |
+| **PostgreSQL** | 5432 | Csak belső Docker hálózat (Dev környezetben 127.0.0.1:15432) |
+| **Redis** | 6379 | Csak belső Docker hálózat (Dev környezetben 127.0.0.1:16379) |
 
 ---
 
@@ -56,17 +58,11 @@ docker compose exec backend python init_db.py
 
 ## 4. Kezdeti Rendszerbeállítások (Admin setup)
 
-Az adatbázis inicializálása után a rendszer létrehoz egy alapértelmezett rendszergazdát:
+Az adatbázis inicializálása után a rendszer létrehoz egy alapértelmezett rendszergazdát (csak ha még nincs adminisztrátor az adatbázisban):
 * **Felhasználónév**: `admin`
 * **Jelszó**: `admin123`
 
-Az első bejelentkezés után javasolt a jelszó azonnali megváltoztatása az adminisztrációs felületen.
-
-### Fejlesztői tesztadatok feltöltése (Seed data)
-A magyar nyelvű elektronikai alkatrészek, kábelek, szerviz kellékek és kategóriák azonnali feltöltéséhez küldjön egy POST kérést az alábbi végpontra (vagy kattintson a felületen a szinkron gombra):
-```bash
-curl -X POST http://localhost:18000/api/seed
-```
+Az első bejelentkezés után a rendszer azonnal kéri a jelszó megváltoztatását (kötelező jelszócsere szabály).
 
 ---
 
@@ -74,40 +70,42 @@ curl -X POST http://localhost:18000/api/seed
 
 A Billingo API V3 integráció beállításához adja meg a titkos Billingo API kulcsát a `.env` fájl `BILLINGO_API_KEY` változójában.
 
-### Megvalósított Billingo Funkciók:
-* **Kapcsolat Ellenőrzés**: Kapcsolati státusz visszajelzés és hibakeresés a Billingo V3 partnerek lekérésével.
-* **Termék Szinkronizálás (Push)**: Helyi termékek feltöltése a Billingo-ba (`POST /v3/products`), SKU és nettó/bruttó árak szinkronban tartásával.
-* **Vevő Lekérés**: Vevő adatok szinkronizációja a számlázáshoz.
-
-### Funkciók, amelyek a Billingo API korlátai miatt helyileg maradnak:
-* **Készletszinkronizáció**: A Billingo API nem támogatja a közvetlen raktárkészlet szinkronizálást és mennyiségek egyeztetését. A készletmozgások valódi forrása (autoritatív adatbázisa) a helyi PostgreSQL adatbázis. A rendszer a szinkron státusznál egyértelműen jelzi: *"A Billingo API jelenleg nem biztosít támogatott készletszinkronizálási műveletet ehhez a funkcióhoz. A készletet ez a rendszer kezeli."*
+### Fontos működési szabály:
+* **Billingo szinkronizáció iránya**: A Billingo integráció **kizárólag importálásra** szolgál. A meglévő termékek beolvasására szolgál kiindulási alapként. A rendszer **nem szinkronizál vissza adatot a Billingo-ba**. A helyi adatbázis a hiteles forrás (autoritatív katalógus).
 
 ---
 
 ## 6. Biztonsági Mentés és Visszaállítás (Backups)
 
-A rendszer beépített, Docker-alapú PostgreSQL mentési rendszerrel rendelkezik, amely naponta 02:00-kor (Budapesti idő szerint) automatikusan lefut. A mentések az egyedi PostgreSQL egyedi dump formátumban (`pg_dump -Fc`) készülnek az alábbi névvel:
-`inventory_YYYY-MM-DD_HHMMSS.dump`
-
-A mentések a gazdagép `./backups` könyvtárában tárolódnak. A rendszer automatikusan megőrzi az utolsó **30 sikeres napi mentést**.
+A rendszer beépített PostgreSQL mentési rendszerrel rendelkezik, amely naponta 02:00-kor (Budapesti idő szerint) automatikusan lefut.
+* **Catch-up (downtime utáni catch-up)**: Ha a rendszer leállás miatt kihagyja az 02:00-s futást, elindulás után észleli a hiányt, és azonnal pótolja a mentést.
+* **Megőrzés**: A rendszer automatikusan megőrzi az utolsó **30 sikeres napi mentést**.
 
 ### Adminisztrátori műveletek konténeren belül:
 
 * **Manuális mentés készítése:**
   ```bash
-  docker compose exec backend python backup_manager.py run
+  docker compose exec backend python backup_manager.py run-backup
   ```
 * **Elérhető mentések listázása:**
   ```bash
-  docker compose exec backend python backup_manager.py list
+  docker compose exec backend python backup_manager.py list-backups
   ```
 * **Mentési dump ellenőrzése (integrity check):**
   ```bash
-  docker compose exec backend python backup_manager.py verify <mentes_neve.dump>
+  docker compose exec backend python backup_manager.py verify-backup <mentes_neve.dump>
+  ```
+  Vagy a legújabb ellenőrzése:
+  ```bash
+  docker compose exec backend python backup_manager.py verify-backup --latest
   ```
 * **Automatizált visszaállítási teszt (átmeneti ellenőrző adatbázisban):**
   ```bash
-  docker compose exec backend python backup_manager.py restore-temp
+  docker compose exec backend python backup_manager.py restore-temp <mentes_neve.dump>
+  ```
+  Vagy a legújabb tesztelése:
+  ```bash
+  docker compose exec backend python backup_manager.py restore-temp --latest
   ```
 
 ### Biztonsági mentés visszaállítása a gazdagépről:
@@ -125,28 +123,24 @@ A visszaállítás biztonsági okokból **csak kézi indítással és megerősí
 
 ---
 
-## 7. Automatikus Tesztek Futtatása
+## 7. Rendszer Egészségügyi Végpontok (Health & Readiness)
 
-A háttérben futó backend integrációs és mentési egységtesztek futtatása:
-```bash
-docker compose exec backend pytest
-```
+Az alkalmazás dedikált végpontokat biztosít a rendszer állapotának nyomon követésére:
+
+* **Liveness végpont**: `GET /api/health/live`
+  - Megerősíti, hogy az API folyamat fut.
+* **Readiness végpont**: `GET /api/health/ready`
+  - Visszaadja a kritikus függőségek részletes állapotát (adatbázis kapcsolat, Redis ping, Alembic adatbázis migrációs séma verzió, biztonsági mentések státuszának ellenőrzése és legrégebbi mentés kora, Celery háttérfolyamat elérhetőség).
+  - Ha kritikus hiba van (pl. adatbázis vagy redis elérhetetlen), `503 Service Unavailable` hibakódot ad vissza.
+
+* **Docker Healthcheck**: A Docker környezet automatikusan ezt a readiness végpontot használja az egészségügyi ellenőrzésekhez.
 
 ---
 
-## 8. Új és Továbbfejlesztett Funkciók
+## 8. Biztonsági és Jogosultsági Hardening
 
-* **Terméklista Usability és Keresés:**
-  - **Szerveroldali lapozás (Pagination):** Nagy termékkatalógusok hatékony kezelése (20, 50, 100, 250 soros oldalak).
-  - **Gyorskeresés & Szűrés:** Keresés név, vonalkód, SKU és Billingo ID alapján; szűrés kategóriák, beszállítók, készletstátuszok (alacsony készlet, készlethiány, nullás), státusz (aktív/archivált) és Billingo-import szerint.
-  - **Oszloprendezés (Sorting):** Kattintható oszlopfejlécek a gyors rendezéshez.
-  - **Részletes Adatlap:** Sorra kattintva megnyitható termék-részletező modal.
-  - **Archiválás & Visszaállítás:** Termékek ideiglenes kivezetése a forgalomból törlés helyett.
-
-* **Nyitókészlet Rögzítése (Opening Stock Workflow):**
-  - **Vonalkód-olvasó támogatás:** Kézi szkennelés 6-jegyű kódokkal, automatikus tétel-hozzáadással és hangjelzéssel.
-  - **Excel Importálás:** Magyar nyelvű sablon letöltése és importálása.
-  - **Row-level ellenőrzés és előnézet:** Feltöltés után a rendszer ellenőrzi a sorokat (ismeretlen vonalkódok, érvénytelen darabszámok, hibás tárhelyek, fájlon belüli duplikátumok kiszűrése).
-  - **Vezetői megerősítés:** Már készletmozgással rendelkező termékek esetén a rendszer megerősítést (force apply) kér a módosításhoz.
-  - **Követhetőség:** Minden rögzítés után automatikusan létrejön egy `Nyitó egyenleg` (`OPENING`) típusú tranzakció.
-
+* **Kötelező biztonsági korlátozások élesben**: Produkciós üzemmódban (`APP_ENV=production`) a backend elutasítja az elindulást, ha a jelszavak, kulcsok vagy titkok (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`) alapértelmezett értéken maradtak vagy hiányoznak.
+* **Bejelentkezési korlátozás**: Redis alapú sliding-window bejelentkezés-védelem és késleltetés (3 rontás után várakoztat, 6 rontás után átmeneti 5 perces tiltást alkalmaz).
+* **Biztonságos Vonalkód Generálás**: A `/api/products/generate-barcode` végpont csak bejelentkezett, termék-létrehozási jogosultsággal (ADMIN, LEADER, WAREHOUSE) rendelkező felhasználók számára érhető el. A végpont csak előnézetet ad vissza a következő szabad vonalkódról, a sorozatot nem égeti el a tényleges termékmentés előtt.
+* **Adminisztrátori Védelem**: A rendszer megakadályozza az utolsó aktív adminisztrátor deaktiválását, törlését vagy szerepkörének módosítását, megelőzve az adminisztrátori zárolást (lockout).
+* **Biztonsági Naplózás (Audit Log)**: Minden biztonsági szempontból kritikus esemény (sikeres/sikertelen bejelentkezések, jelszócserék, jogosultság változások, aktiválások) rögzítésre kerül az audit naplóban.
