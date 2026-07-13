@@ -15,11 +15,27 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ products, movements, sseEvents }: DashboardProps) {
+  const lowStockProducts = products.filter(p => 
+    !p.is_archived && 
+    p.is_active && 
+    p.track_stock && 
+    p.minimum_stock > 0 && 
+    p.current_stock <= p.minimum_stock
+  );
+
+  const barcodesWithMovements = new Set(movements.map(m => m.barcode));
+  const notYetStockedProducts = products.filter(p => 
+    !p.is_archived && 
+    p.is_active && 
+    p.current_stock === 0 && 
+    !barcodesWithMovements.has(p.barcode)
+  );
+
   return (
     <div>
       <h1 style={{ fontSize: '24px', margin: '0 0 20px 0' }}>Üzleti Áttekintő</h1>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '24px' }}>
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '14px', color: '#94a3b8' }}>Összes termék a rendszerben</div>
           <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#38bdf8', marginTop: '8px' }}>{products.length} db</div>
@@ -39,7 +55,13 @@ export default function Dashboard({ products, movements, sseEvents }: DashboardP
         <div className="glass-panel" style={{ padding: '20px' }}>
           <div style={{ fontSize: '14px', color: '#94a3b8' }}>Készlethiányos termékek</div>
           <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f87171', marginTop: '8px' }}>
-            {products.filter(p => p.current_stock <= p.minimum_stock).length} db
+            {lowStockProducts.length} db
+          </div>
+        </div>
+        <div className="glass-panel" style={{ padding: '20px' }}>
+          <div style={{ fontSize: '14px', color: '#94a3b8' }}>Még nem készletezett termékek</div>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#a78bfa', marginTop: '8px' }}>
+            {notYetStockedProducts.length} db
           </div>
         </div>
       </div>

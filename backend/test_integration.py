@@ -749,3 +749,202 @@ async def test_update_and_delete_single_product():
             await session.commit()
 
 
+@pytest.mark.anyio
+async def test_product_archive_and_restore():
+    admin_user = None
+    product = None
+    
+    async with AsyncSessionLocal() as session:
+        admin_user = User(
+            username="archive_admin",
+            hashed_password=get_password_hash("archivePass123"),
+            role=UserRole.ADMIN,
+            is_active=True
+        )
+        product = Product(
+            name="Test Archive Prod",
+            barcode="999920",
+            is_archived=False
+        )
+        session.add_all([admin_user, product])
+        await session.commit()
+        await session.refresh(product)
+        
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=TEST_URL) as client:
+            # Login
+            login_resp = await client.post("/auth/login", data={
+                "username": "archive_admin",
+                "password": "archivePass123"
+            })
+            assert login_resp.status_code == 200
+            token = login_resp.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            # Archive
+            arc_resp = await client.post(f"/products/{product.id}/archive", headers=headers)
+            assert arc_resp.status_code == 200
+            
+            # Verify in DB
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(select(Product).where(Product.id == product.id))
+                db_prod = res.scalar_one()
+                assert db_prod.is_archived is True
+                
+            # Restore
+            res_resp = await client.post(f"/products/{product.id}/restore", headers=headers)
+            assert res_resp.status_code == 200
+            
+            # Verify in DB
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(select(Product).where(Product.id == product.id))
+                db_prod = res.scalar_one()
+                assert db_prod.is_archived is False
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(AuditLog).where(AuditLog.username == "archive_admin"))
+            if admin_user:
+                await session.execute(delete(User).where(User.username == "archive_admin"))
+            await session.execute(delete(Product).where(Product.barcode == "999920"))
+            await session.commit()
+
+
+@pytest.mark.anyio
+async def test_opening_stock_workflow():
+    from models import Location
+    from models_inventory import InventoryMovement, MovementType
+    
+    admin_user = None
+    product = None
+    location = None
+    
+    async with AsyncSessionLocal() as session:
+        # Pre-cleanup
+        await session.execute(delete(InventoryMovement).where(InventoryMovement.product_id.in_(
+            select(Product.id).where(Product.barcode == "999930")
+        )))
+        await session.execute(delete(Product).where(Product.barcode == "999930"))
+        await session.execute(delete(AuditLog).where(AuditLog.username == "opening_admin"))
+        await session.execute(delete(User).where(User.username == "opening_admin"))
+        await session.execute(delete(Location).where(Location.name == "Opening Loc"))
+        await session.commit()
+
+    async with AsyncSessionLocal() as session:
+        admin_user = User(
+            username="opening_admin",
+            hashed_password=get_password_hash("openingPass123"),
+            role=UserRole.ADMIN,
+            is_active=True
+        )
+        product = Product(
+            name="Test Opening Prod",
+            barcode="999930",
+            current_stock=0
+        )
+        location = Location(name="Opening Loc")
+        session.add_all([admin_user, product, location])
+        await session.commit()
+        await session.refresh(product)
+        await session.refresh(location)
+        
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=TEST_URL) as client:
+            # Login
+            login_resp = await client.post("/auth/login", data={
+                "username": "opening_admin",
+                "password": "openingPass123"
+            })
+            assert login_resp.status_code == 200
+            token = login_resp.json()["access_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            # Check movements
+            check_resp = await client.post("/inventory/opening-stock/check-movements", json={
+                "product_ids": [product.id]
+            }, headers=headers)
+            assert check_resp.status_code == 200
+            assert check_resp.json()[product.id] is False
+            
+            # Apply opening stock
+            apply_resp = await client.post("/inventory/opening-stock", json={
+                "items": [
+                    {
+                        "product_id": product.id,
+                        "quantity": 25,
+                        "location_id": location.id
+                    }
+                ],
+                "note": "Initial opening stock test"
+            }, headers=headers)
+            assert apply_resp.status_code == 200
+            
+            # Verify in DB
+            async with AsyncSessionLocal() as session:
+                # Product stock updated
+                res = await session.execute(select(Product).where(Product.id == product.id))
+                db_prod = res.scalar_one()
+                assert db_prod.current_stock == 25
+                
+                # Movement created
+                mv_res = await session.execute(
+                    select(InventoryMovement)
+                    .where(InventoryMovement.product_id == product.id)
+                )
+                db_mv = mv_res.scalar_one()
+                assert db_mv.quantity_delta == 25
+                assert db_mv.stock_before == 0
+                assert db_mv.stock_after == 25
+                assert db_mv.movement_type == MovementType.OPENING
+                
+            # Check movements now reports True
+            check_resp2 = await client.post("/inventory/opening-stock/check-movements", json={
+                "product_ids": [product.id]
+            }, headers=headers)
+            assert check_resp2.status_code == 200
+            assert check_resp2.json()[product.id] is True
+            
+            # Try to apply again without force_apply -> should fail (409 Conflict)
+            apply_fail_resp = await client.post("/inventory/opening-stock", json={
+                "items": [
+                    {
+                        "product_id": product.id,
+                        "quantity": 30,
+                        "location_id": location.id
+                    }
+                ],
+                "force_apply": False
+            }, headers=headers)
+            assert apply_fail_resp.status_code == 409
+            
+            # Apply again with force_apply -> should succeed
+            apply_force_resp = await client.post("/inventory/opening-stock", json={
+                "items": [
+                    {
+                        "product_id": product.id,
+                        "quantity": 30,
+                        "location_id": location.id
+                    }
+                ],
+                "force_apply": True
+            }, headers=headers)
+            assert apply_force_resp.status_code == 200
+            
+            # Verify in DB again
+            async with AsyncSessionLocal() as session:
+                res = await session.execute(select(Product).where(Product.id == product.id))
+                db_prod = res.scalar_one()
+                assert db_prod.current_stock == 30
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(AuditLog).where(AuditLog.username == "opening_admin"))
+            if product:
+                await session.execute(delete(InventoryMovement).where(InventoryMovement.product_id == product.id))
+                await session.execute(delete(Product).where(Product.barcode == "999930"))
+            if admin_user:
+                await session.execute(delete(User).where(User.username == "opening_admin"))
+            await session.execute(delete(Location).where(Location.name == "Opening Loc"))
+            await session.commit()
+
+
+
+

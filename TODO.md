@@ -4,11 +4,11 @@ The application is now actively usable. Product creation, editing, deletion/arch
 
 The next priority is data safety, followed by high-value daily usability improvements.
 
-# 0. Remove default login display
+# 0. Remove default login display ✔
 
 Remove the default admin/admin123 prompt from under the login, and also remove the default values from within the login fields
 
-# 1. Implement automatic PostgreSQL backups
+# 1. Implement automatic PostgreSQL backups ✔
 
 Create a production-safe automated backup system integrated with Docker Compose.
 
@@ -76,7 +76,7 @@ The normal restore script must:
 
 Never automatically restore a backup.
 
-# 2. Add backup status to Settings
+# 2. Add backup status to Settings ✔
 
 Under Beállítások → Biztonsági mentés, display:
 
@@ -106,7 +106,7 @@ The UI must clearly warn:
 
 “A helyi biztonsági mentés nem véd a gazdagép vagy a háttértár meghibásodása ellen.”
 
-# 3. Add automated restore verification
+# 3. Add automated restore verification ✔
 
 Create a safe verification script or scheduled task that can:
 
@@ -123,7 +123,7 @@ Run restore verification weekly, or provide a documented manual command if autom
 
 Add tests for filename handling, retention and unsafe restore protection.
 
-# 4. Improve product-list usability
+# 4. Improve product-list usability ✔
 
 The application has more than 500 imported products.
 
@@ -147,7 +147,7 @@ Add:
 
 Do not load all products into the browser at once.
 
-# 5. Add opening-stock import
+# 5. Add opening-stock import ✔
 
 Billingo imports product data but does not provide reliable current inventory quantities.
 
@@ -177,7 +177,7 @@ Do not directly overwrite product stock.
 
 For products that already have stock movements, show a warning and require manager confirmation before applying another opening balance.
 
-# 6. Fix dashboard stock indicators
+# 6. Fix dashboard stock indicators ✔
 
 Low-stock reporting must not treat every imported zero-stock catalogue product as an emergency.
 

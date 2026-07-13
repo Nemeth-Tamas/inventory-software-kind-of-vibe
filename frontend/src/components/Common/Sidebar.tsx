@@ -13,6 +13,7 @@ export default function Sidebar({ activeTab, setActiveTab, setActiveStocktake, c
     { id: 'dashboard', label: 'Áttekintés', icon: LayoutDashboard },
     { id: 'products', label: 'Termékek', icon: Package },
     { id: 'receipt', label: 'Bevételezés', icon: ShoppingCart },
+    { id: 'opening_stock', label: 'Nyitókészlet', icon: Package },
     { id: 'issue', label: 'Kiadás', icon: ArrowLeftRight },
     { id: 'stocktake', label: 'Leltár (Leltározás)', icon: ClipboardCheck },
     { id: 'billingo', label: 'Billingo Import', icon: RefreshCw },

@@ -86,23 +86,67 @@ A Billingo API V3 integráció beállításához adja meg a titkos Billingo API 
 
 ## 6. Biztonsági Mentés és Visszaállítás (Backups)
 
-### Manuális mentés készítése:
-A biztonsági mentés a `docker/backup.sh` futtatásával vagy az alábbi paranccsal végezhető el:
-```bash
-./docker/backup.sh
-```
-A mentett SQL fájlok a `./backups` mappába kerülnek, a script automatikusan megtartja a legutolsó 7 nap mentését.
+A rendszer beépített, Docker-alapú PostgreSQL mentési rendszerrel rendelkezik, amely naponta 02:00-kor (Budapesti idő szerint) automatikusan lefut. A mentések az egyedi PostgreSQL egyedi dump formátumban (`pg_dump -Fc`) készülnek az alábbi névvel:
+`inventory_YYYY-MM-DD_HHMMSS.dump`
 
-### Biztonsági mentés visszaállítása:
-```bash
-./docker/restore.sh ./backups/inventory_backup_XXXXXXXX_XXXXXX.sql
-```
+A mentések a gazdagép `./backups` könyvtárában tárolódnak. A rendszer automatikusan megőrzi az utolsó **30 sikeres napi mentést**.
+
+### Adminisztrátori műveletek konténeren belül:
+
+* **Manuális mentés készítése:**
+  ```bash
+  docker compose exec backend python backup_manager.py run
+  ```
+* **Elérhető mentések listázása:**
+  ```bash
+  docker compose exec backend python backup_manager.py list
+  ```
+* **Mentési dump ellenőrzése (integrity check):**
+  ```bash
+  docker compose exec backend python backup_manager.py verify <mentes_neve.dump>
+  ```
+* **Automatizált visszaállítási teszt (átmeneti ellenőrző adatbázisban):**
+  ```bash
+  docker compose exec backend python backup_manager.py restore-temp
+  ```
+
+### Biztonsági mentés visszaállítása a gazdagépről:
+
+A visszaállítás biztonsági okokból **csak kézi indítással és megerősítéssel** futtatható a gazdagépről az alábbi biztonságos parancsfájlok használatával (amelyek leállítják az írási műveleteket az adatbázis zárolásával a helyreállítás alatt):
+
+* **Linux (Bash):**
+  ```bash
+  ./restore.sh --backup ./backups/inventory_YYYY-MM-DD_HHMMSS.dump --confirm
+  ```
+* **Windows (PowerShell):**
+  ```powershell
+  .\restore.ps1 -BackupFile .\backups\inventory_YYYY-MM-DD_HHMMSS.dump -Confirm
+  ```
 
 ---
 
 ## 7. Automatikus Tesztek Futtatása
 
-A háttérben futó backend tesztek (éves vonalkód szekvenciák generálása, hexadecimális határérték túlcsordulások tesztjei) futtatása:
+A háttérben futó backend integrációs és mentési egységtesztek futtatása:
 ```bash
-docker compose exec backend pytest test_barcode.py
+docker compose exec backend pytest
 ```
+
+---
+
+## 8. Új és Továbbfejlesztett Funkciók
+
+* **Terméklista Usability és Keresés:**
+  - **Szerveroldali lapozás (Pagination):** Nagy termékkatalógusok hatékony kezelése (20, 50, 100, 250 soros oldalak).
+  - **Gyorskeresés & Szűrés:** Keresés név, vonalkód, SKU és Billingo ID alapján; szűrés kategóriák, beszállítók, készletstátuszok (alacsony készlet, készlethiány, nullás), státusz (aktív/archivált) és Billingo-import szerint.
+  - **Oszloprendezés (Sorting):** Kattintható oszlopfejlécek a gyors rendezéshez.
+  - **Részletes Adatlap:** Sorra kattintva megnyitható termék-részletező modal.
+  - **Archiválás & Visszaállítás:** Termékek ideiglenes kivezetése a forgalomból törlés helyett.
+
+* **Nyitókészlet Rögzítése (Opening Stock Workflow):**
+  - **Vonalkód-olvasó támogatás:** Kézi szkennelés 6-jegyű kódokkal, automatikus tétel-hozzáadással és hangjelzéssel.
+  - **Excel Importálás:** Magyar nyelvű sablon letöltése és importálása.
+  - **Row-level ellenőrzés és előnézet:** Feltöltés után a rendszer ellenőrzi a sorokat (ismeretlen vonalkódok, érvénytelen darabszámok, hibás tárhelyek, fájlon belüli duplikátumok kiszűrése).
+  - **Vezetői megerősítés:** Már készletmozgással rendelkező termékek esetén a rendszer megerősítést (force apply) kér a módosításhoz.
+  - **Követhetőség:** Minden rögzítés után automatikusan létrejön egy `Nyitó egyenleg` (`OPENING`) típusú tranzakció.
+

@@ -1,0 +1,23 @@
+# Backups
+backups/*
+!backups/.gitkeep
+
+# Environments
+.env
+.env.*
+venv/
+.venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.eslintcache

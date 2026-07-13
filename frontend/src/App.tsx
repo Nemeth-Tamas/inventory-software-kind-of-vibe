@@ -12,6 +12,7 @@ import Stocktake from './components/Stocktake/Stocktake';
 import Billingo from './components/Billingo/Billingo';
 import AuditLogs from './components/Audit/AuditLogs';
 import Settings from './components/Settings/Settings';
+import OpeningStock from './components/OpeningStock/OpeningStock';
 
 import { API_BASE } from './config';
 
@@ -93,7 +94,7 @@ export default function App() {
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const [resProd, resCat, resLoc, resSup, resMov, resLogs, resSt] = await Promise.all([
-        fetch(`${API_BASE}/products`, { headers }),
+        fetch(`${API_BASE}/products?all=true`, { headers }),
         fetch(`${API_BASE}/categories`, { headers }),
         fetch(`${API_BASE}/locations`, { headers }),
         fetch(`${API_BASE}/suppliers`, { headers }),
@@ -365,7 +366,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard products={products} movements={movements} sseEvents={sseEvents} />;
       case 'products':
-        return <Products token={token} products={products} categories={categories} locations={locations} suppliers={suppliers} fetchData={fetchData} />;
+        return <Products token={token} categories={categories} locations={locations} suppliers={suppliers} fetchData={fetchData} />;
       case 'receipt':
         return (
           <Receipt 
@@ -411,6 +412,16 @@ export default function App() {
             setStocktakeItems={setStocktakeItems} 
             products={products}
             fetchData={fetchData} 
+            playBeep={playBeep}
+          />
+        );
+      case 'opening_stock':
+        return (
+          <OpeningStock 
+            token={token}
+            locations={locations}
+            fetchData={fetchData}
+            products={products}
             playBeep={playBeep}
           />
         );

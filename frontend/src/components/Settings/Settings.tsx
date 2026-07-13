@@ -66,6 +66,10 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState('warehouse');
 
+  // 6. Backup State
+  const [backupStatus, setBackupStatus] = useState<any>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+
   // Load active tab data
   useEffect(() => {
     setMessage('');
@@ -81,8 +85,101 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
       fetchSuppliers();
     } else if (activeSubTab === 'users') {
       fetchUsers();
+    } else if (activeSubTab === 'backup') {
+      fetchBackupStatus();
     }
   }, [activeSubTab]);
+
+  const fetchBackupStatus = async () => {
+    setBackupLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/settings/backup/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBackupStatus(data);
+      } else {
+        setError('Nem sikerült lekérni a biztonsági mentés állapotát.');
+      }
+    } catch (err) {
+      setError('Hálózati hiba a biztonsági mentés lekérdezésekor.');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRunBackup = async () => {
+    playBeep(1200, 0.15);
+    setBackupLoading(true);
+    setMessage('');
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/settings/backup/run`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMessage(`Sikeres biztonsági mentés! Fájl: ${data.filename}`);
+        fetchBackupStatus();
+      } else {
+        const err = await response.json();
+        setError(`Sikertelen mentés: ${err.detail || 'Ismeretlen hiba'}`);
+      }
+    } catch (err) {
+      setError('Hálózati hiba a biztonsági mentés futtatásakor.');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleVerifyBackup = async (filename: string) => {
+    playBeep(1000, 0.1);
+    setBackupLoading(true);
+    setMessage('');
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/settings/backup/verify/${filename}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setMessage(`A(z) ${filename} mentés sikeresen ellenőrizve és visszaállítva az ellenőrző adatbázisba.`);
+        fetchBackupStatus();
+      } else {
+        const err = await response.json();
+        setError(`Sikertelen ellenőrzés: ${err.detail || 'Ismeretlen hiba'}`);
+      }
+    } catch (err) {
+      setError('Hálózati hiba a mentés ellenőrzésekor.');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleDownloadBackup = async (filename: string) => {
+    playBeep(1000, 0.1);
+    try {
+      const response = await fetch(`${API_BASE}/settings/backup/download/${filename}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        alert('Nem sikerült letölteni a fájlt.');
+      }
+    } catch (err) {
+      alert('Hálózati hiba a fájl letöltésekor.');
+    }
+  };
 
   // Billingo
   const fetchBillingoSettings = async () => {
@@ -1217,14 +1314,274 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
         {/* 11. BACKUP TAB */}
         {activeSubTab === 'backup' && (
           <div>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '20px' }}>Biztonsági mentés</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="glass-panel" style={{ padding: '20px' }}>
-                <strong>Adatbázis mentési pont készítése</strong>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 12px 0' }}>Készítsen biztonsági másolatot a teljes PostgreSQL adatbázisról egyetlen kattintással.</p>
-                <button onClick={() => { playBeep(1200, 0.15); alert("Biztonsági mentés sikeresen elkészült és letölthető a szerverről!"); }} style={{ padding: '10px 16px', backgroundColor: '#0284c7', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Mentés készítése</button>
-              </div>
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '20px' }}>Biztonsági Mentés & Helyreállítás</h2>
+            
+            {/* Warning Message */}
+            <div style={{
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              color: '#fbbf24',
+              border: '1px solid rgba(245, 158, 11, 0.2)',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '500',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span>⚠️</span>
+              <strong>A helyi biztonsági mentés nem véd a gazdagép vagy a háttértár meghibásodása ellen.</strong>
             </div>
+
+            {backupLoading && (
+              <div style={{ padding: '12px', backgroundColor: 'rgba(2, 132, 199, 0.1)', color: '#38bdf8', border: '1px solid rgba(2, 132, 199, 0.2)', borderRadius: '6px', marginBottom: '16px', textAlign: 'center', fontWeight: 'bold' }}>
+                🔄 Művelet folyamatban, kérjük várjon...
+              </div>
+            )}
+
+            {message && (
+              <div style={{ padding: '12px', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.2)', borderRadius: '6px', marginBottom: '16px', fontWeight: '500' }}>
+                ✅ {message}
+              </div>
+            )}
+
+            {error && (
+              <div style={{ padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', marginBottom: '16px', fontWeight: '500' }}>
+                ❌ {error}
+              </div>
+            )}
+
+            {backupStatus ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                
+                {/* Stats Panel */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  
+                  {/* Configuration */}
+                  <div className="glass-panel" style={{ padding: '20px' }}>
+                    <h4 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #1e293b', paddingBottom: '8px', color: '#38bdf8' }}>Ütemezés & Beállítások</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Automatikus mentés:</span>
+                        <strong style={{ color: '#22c55e' }}>AKTÍV</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Ütemezés:</span>
+                        <span>{backupStatus.schedule}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Megőrzési korlát:</span>
+                        <span>{backupStatus.retention_days} sikeres mentés</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Következő tervezett mentés:</span>
+                        <strong style={{ color: '#38bdf8' }}>{formatDate(backupStatus.next_expected_backup)}</strong>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Mentések könyvtára:</span>
+                        <code style={{ backgroundColor: '#0f172a', padding: '2px 6px', borderRadius: '4px' }}>{backupStatus.backup_directory}</code>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#94a3b8' }}>Szabad lemezterület:</span>
+                        <strong>{backupStatus.disk_space_free ? (backupStatus.disk_space_free / 1024 / 1024 / 1024).toFixed(2) + ' GB' : '-'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Last Status */}
+                  <div className="glass-panel" style={{ padding: '20px' }}>
+                    <h4 style={{ margin: '0 0 12px 0', borderBottom: '1px solid #1e293b', paddingBottom: '8px', color: '#38bdf8' }}>Legutóbbi Állapot</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                      {backupStatus.last_successful ? (
+                        <>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ color: '#94a3b8' }}>Legutóbbi sikeres mentés fájlja:</span>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{backupStatus.last_successful.filename}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#94a3b8' }}>Fájl mérete:</span>
+                            <span>{(backupStatus.last_successful.size / 1024).toFixed(1)} KB</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#94a3b8' }}>Létrejött:</span>
+                            <span>{formatDate(backupStatus.last_successful.timestamp)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ color: '#64748b', fontStyle: 'italic' }}>Nincs korábbi sikeres mentés rögzítve.</div>
+                      )}
+                      
+                      <div style={{ borderTop: '1px solid #1e293b', paddingTop: '10px', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: '#94a3b8' }}>Legutóbbi próbálkozás:</span>
+                          <strong>{backupStatus.last_attempted ? formatDate(backupStatus.last_attempted.timestamp) : '-'}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                          <span style={{ color: '#94a3b8' }}>Eredmény:</span>
+                          {backupStatus.last_attempted ? (
+                            backupStatus.last_attempted.success ? (
+                              <span className="badge badge-success">Sikeres</span>
+                            ) : (
+                              <span className="badge badge-danger">Sikertelen</span>
+                            )
+                          ) : '-'}
+                        </div>
+                        {backupStatus.last_attempted && backupStatus.last_attempted.error_msg && (
+                          <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '6px', backgroundColor: 'rgba(239,68,68,0.1)', padding: '6px', borderRadius: '4px' }}>
+                            {backupStatus.last_attempted.error_msg}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Instant Backup Trigger */}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={handleRunBackup}
+                    disabled={backupLoading}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#0284c7',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontWeight: 'bold',
+                      cursor: backupLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Database size={16} /> Biztonsági mentés készítése most
+                  </button>
+                  
+                  <button
+                    onClick={fetchBackupStatus}
+                    disabled={backupLoading}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#1e293b',
+                      color: '#cbd5e1',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <RefreshCw size={16} /> Állapot frissítése
+                  </button>
+                </div>
+
+                {/* Backup Files List */}
+                <div className="glass-panel" style={{ padding: '20px' }}>
+                  <h3 style={{ margin: '0 0 16px 0', fontSize: '18px' }}>Elérhető Mentési Fájlok a Szerveren</h3>
+                  <div className="table-container">
+                    <table className="dense-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>Fájlnév</th>
+                          <th>Létrehozva</th>
+                          <th>Méret</th>
+                          <th>Helyreállíthatósági Ellenőrzés</th>
+                          <th>Műveletek</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {backupStatus.backup_files && backupStatus.backup_files.length > 0 ? (
+                          backupStatus.backup_files.map((file: any) => {
+                            const ver = backupStatus.verification_history?.find((v: any) => v.backup_file === file.filename);
+                            return (
+                              <tr key={file.filename}>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{file.filename}</td>
+                                <td>{formatDate(file.created_at)}</td>
+                                <td>{(file.size / 1024).toFixed(1)} KB</td>
+                                <td>
+                                  {ver ? (
+                                    ver.success ? (
+                                      <span className="badge badge-success" title={`Séma verzió: ${ver.schema_version}, Termékek: ${ver.products_count}`}>
+                                        Sikeresen Tesztelve ({formatDate(ver.timestamp)})
+                                      </span>
+                                    ) : (
+                                      <span className="badge badge-danger" title={ver.error}>
+                                        Hibás mentés! ({formatDate(ver.timestamp)})
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span style={{ color: '#64748b', fontStyle: 'italic' }}>Még nem volt ellenőrizve</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                      onClick={() => handleVerifyBackup(file.filename)}
+                                      disabled={backupLoading}
+                                      style={{ padding: '6px 10px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                    >
+                                      Teszt Visszaállítás
+                                    </button>
+                                    <button
+                                      onClick={() => handleDownloadBackup(file.filename)}
+                                      style={{ padding: '6px 10px', backgroundColor: '#475569', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                                    >
+                                      Letöltés
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={5} style={{ textAlign: 'center', color: '#64748b', padding: '16px' }}>Nem található mentési fájl.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Restore Instructions */}
+                <div className="glass-panel" style={{ padding: '20px', backgroundColor: 'rgba(2, 132, 199, 0.05)', border: '1px solid rgba(2, 132, 199, 0.2)' }}>
+                  <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#38bdf8' }}>Adatbázis Visszaállítási Útmutató (CLI)</h3>
+                  <p style={{ fontSize: '13px', color: '#cbd5e1', margin: '0 0 16px 0' }}>
+                    Biztonsági okokból a böngészőből történő közvetlen éles visszaállítás nem támogatott. A helyreállítást a szerver parancssorából (CLI) kell kezdeményezni.
+                  </p>
+                  
+                  <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                      <strong>Linux / macOS gazdagépen:</strong>
+                      <pre style={{ backgroundColor: '#090d16', padding: '10px', borderRadius: '6px', margin: '6px 0', color: '#38bdf8', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        ./restore.sh &lt;mentes_fajl_neve.dump&gt; --confirm
+                      </pre>
+                    </div>
+                    
+                    <div>
+                      <strong>Windows PowerShell-ben:</strong>
+                      <pre style={{ backgroundColor: '#090d16', padding: '10px', borderRadius: '6px', margin: '6px 0', color: '#38bdf8', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        .\restore.ps1 -BackupFile &lt;mentes_fajl_neve.dump&gt; -ConfirmFlag --confirm
+                      </pre>
+                    </div>
+
+                    <div>
+                      <strong>Közvetlenül a biztonsági mentő konténeren belül:</strong>
+                      <pre style={{ backgroundColor: '#090d16', padding: '10px', borderRadius: '6px', margin: '6px 0', color: '#38bdf8', fontFamily: 'monospace', overflowX: 'auto' }}>
+                        docker compose exec backup python backup_manager.py restore-live &lt;mentes_fajl_neve.dump&gt; --confirm
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div style={{ color: '#64748b', fontStyle: 'italic', padding: '20px' }}>Mentés állapotának betöltése...</div>
+            )}
+
           </div>
         )}
 

@@ -9,14 +9,13 @@ const formatHUF = (value: number) => {
 
 interface ProductsProps {
   token: string | null;
-  products: any[];
   categories: any[];
   locations: any[];
   suppliers: any[];
   fetchData: () => void;
 }
 
-export default function Products({ token, products, categories, locations, suppliers, fetchData }: ProductsProps) {
+export default function Products({ token, categories, locations, suppliers, fetchData }: ProductsProps) {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [newProdName, setNewProdName] = useState('');
   const [newProdSku, setNewProdSku] = useState('');
@@ -86,6 +85,117 @@ export default function Products({ token, products, categories, locations, suppl
 
   const editCatRef = useRef<HTMLDivElement>(null);
   const editSupRef = useRef<HTMLDivElement>(null);
+
+  // Paginated List & Filter States
+  const [paginatedProducts, setPaginatedProducts] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterArchived, setFilterArchived] = useState(false);
+  const [filterStockStatus, setFilterStockStatus] = useState('all');
+  const [filterBillingoImported, setFilterBillingoImported] = useState('all');
+  
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
+  
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [localSearch, setLocalSearch] = useState('');
+
+  const fetchPaginatedProducts = async () => {
+    setListLoading(true);
+    setListError('');
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        q: searchQuery,
+        category_id: filterCategory,
+        supplier_id: filterSupplier,
+        is_archived: filterArchived.toString(),
+        stock_status: filterStockStatus,
+        billingo_imported: filterBillingoImported,
+        sort_by: sortBy,
+        sort_order: sortOrder
+      });
+      const response = await fetch(`${API_BASE}/products?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPaginatedProducts(data.items);
+        setTotal(data.total);
+        setPages(data.pages);
+      } else {
+        const err = await response.json();
+        setListError(err.detail || 'Hiba a termékek betöltésekor.');
+      }
+    } catch (err) {
+      setListError('Hálózati hiba a termékek betöltésekor.');
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchPaginatedProducts();
+    }
+  }, [token, page, limit, searchQuery, filterCategory, filterSupplier, filterArchived, filterStockStatus, filterBillingoImported, sortBy, sortOrder]);
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+    setPage(1);
+  };
+
+  const handleArchiveProduct = async (productId: string) => {
+    if (!window.confirm("Biztosan archiválni szeretné ezt a terméket?")) return;
+    try {
+      const response = await fetch(`${API_BASE}/products/${productId}/archive`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        fetchPaginatedProducts();
+        fetchData();
+      } else {
+        const err = await response.json();
+        alert(`Sikertelen archiválás: ${err.detail}`);
+      }
+    } catch (err) {
+      alert("Hálózati hiba.");
+    }
+  };
+
+  const handleRestoreProduct = async (productId: string) => {
+    if (!window.confirm("Biztosan vissza szeretné állítani ezt a terméket az archívumból?")) return;
+    try {
+      const response = await fetch(`${API_BASE}/products/${productId}/restore`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        fetchPaginatedProducts();
+        fetchData();
+      } else {
+        const err = await response.json();
+        alert(`Sikertelen visszaállítás: ${err.detail}`);
+      }
+    } catch (err) {
+      alert("Hálózati hiba.");
+    }
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -278,6 +388,7 @@ export default function Products({ token, products, categories, locations, suppl
         confetti();
         setShowAddProduct(false);
         fetchData();
+        fetchPaginatedProducts();
         
         // Reset states
         setNewProdName('');
@@ -400,6 +511,7 @@ export default function Products({ token, products, categories, locations, suppl
       if (response.ok) {
         setEditingProduct(null);
         fetchData();
+        fetchPaginatedProducts();
       } else {
         const err = await response.json();
         alert(`Hiba termék módosítása során: ${err.detail}`);
@@ -423,6 +535,7 @@ export default function Products({ token, products, categories, locations, suppl
 
       if (response.ok) {
         fetchData();
+        fetchPaginatedProducts();
       } else {
         const err = await response.json();
         alert(`Hiba termék törlése során: ${err.detail}`);
@@ -450,6 +563,7 @@ export default function Products({ token, products, categories, locations, suppl
         const result = await response.json();
         alert(result.message);
         fetchData();
+        fetchPaginatedProducts();
       } else {
         const err = await response.json();
         alert(`Hiba: ${err.detail}`);
@@ -987,29 +1101,152 @@ export default function Products({ token, products, categories, locations, suppl
         </div>
       )}
 
+      {/* Search & Filters Panel */}
+      <div className="glass-panel" style={{ padding: '16px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ flex: 2, display: 'flex', gap: '6px' }}>
+            <input 
+              type="text" 
+              placeholder="Keresés név, belső kód, Billingo ID vagy SKU alapján..." 
+              value={localSearch}
+              onChange={e => setLocalSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { setSearchQuery(localSearch); setPage(1); } }}
+              style={{ flex: 1, padding: '10px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px', minWidth: '100px' }}
+            />
+            <button 
+              onClick={() => { setSearchQuery(localSearch); setPage(1); }}
+              style={{ padding: '10px 16px', backgroundColor: '#0284c7', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              Keresés
+            </button>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', flex: 3, flexWrap: 'wrap' }}>
+            {/* Category Filter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Kategória</label>
+              <select 
+                value={filterCategory} 
+                onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
+                style={{ padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px' }}
+              >
+                <option value="">Mindegyik</option>
+                {categories.filter(c => !c.is_archived).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Supplier Filter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Beszállító</label>
+              <select 
+                value={filterSupplier} 
+                onChange={e => { setFilterSupplier(e.target.value); setPage(1); }}
+                style={{ padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px' }}
+              >
+                <option value="">Mindegyik</option>
+                {suppliers.filter(s => !s.is_archived).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Stock Status Filter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Készlet állapota</label>
+              <select 
+                value={filterStockStatus} 
+                onChange={e => { setFilterStockStatus(e.target.value); setPage(1); }}
+                style={{ padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px' }}
+              >
+                <option value="all">Mindegyik</option>
+                <option value="low">Alacsony készlet</option>
+                <option value="in_stock">Raktáron van</option>
+                <option value="out_of_stock">Készlethiány</option>
+                <option value="zero_stock">Nullás készlet</option>
+              </select>
+            </div>
+
+            {/* Billingo Imported Filter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Billingo Import</label>
+              <select 
+                value={filterBillingoImported} 
+                onChange={e => { setFilterBillingoImported(e.target.value); setPage(1); }}
+                style={{ padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px' }}
+              >
+                <option value="all">Mindegyik</option>
+                <option value="true">Csak Billingo-ból importált</option>
+                <option value="false">Nem Billingo-ból importált</option>
+              </select>
+            </div>
+
+            {/* Active/Archived Filter */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '130px' }}>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Státusz</label>
+              <select 
+                value={filterArchived.toString()} 
+                onChange={e => { setFilterArchived(e.target.value === 'true'); setPage(1); }}
+                style={{ padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '6px' }}
+              >
+                <option value="false">Aktív termékek</option>
+                <option value="true">Archivált termékek</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {listError && (
+        <div style={{ padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', marginBottom: '16px' }}>
+          {listError}
+        </div>
+      )}
+
+      {listLoading && (
+        <div style={{ padding: '12px', backgroundColor: 'rgba(2, 132, 199, 0.1)', color: '#38bdf8', border: '1px solid rgba(2, 132, 199, 0.2)', borderRadius: '6px', marginBottom: '16px', textAlign: 'center', fontWeight: 'bold' }}>
+          🔄 Termékek betöltése a szerverről...
+        </div>
+      )}
+
       <div className="table-container">
         <table className="dense-table">
           <thead>
             <tr>
-              <th>Belső kód</th>
-              <th>Cikkszám (SKU)</th>
-              <th>Termék név</th>
+              <th onClick={() => handleSort('barcode')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Belső kód {sortBy === 'barcode' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
+              <th onClick={() => handleSort('sku')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Cikkszám (SKU) {sortBy === 'sku' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
+              <th onClick={() => handleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Termék név {sortBy === 'name' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
               <th>Egység</th>
-              <th>Beszerzési ár (Nettó)</th>
-              <th>Eladási ár (Bruttó)</th>
-              <th>Készlet</th>
-              <th>Állapot</th>
+              <th onClick={() => handleSort('purchase_price_net')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Beszerzési ár (Nettó) {sortBy === 'purchase_price_net' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
+              <th onClick={() => handleSort('sale_price_gross')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Eladási ár (Bruttó) {sortBy === 'sale_price_gross' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
+              <th onClick={() => handleSort('current_stock')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Készlet {sortBy === 'current_stock' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
+              <th onClick={() => handleSort('is_active')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                Állapot {sortBy === 'is_active' ? (sortOrder === 'asc' ? ' ▲' : ' ▼') : ''}
+              </th>
               <th>Műveletek</th>
             </tr>
           </thead>
           <tbody>
-            {products.length === 0 ? (
+            {paginatedProducts.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', color: '#64748b' }}>Nincs megjeleníthető termék.</td>
+                <td colSpan={9} style={{ textAlign: 'center', color: '#64748b', padding: '16px' }}>Nincs megjeleníthető termék a kiválasztott szűrőkkel.</td>
               </tr>
             ) : (
-              products.map(p => (
-                <tr key={p.id}>
+              paginatedProducts.map(p => (
+                <tr key={p.id} onClick={() => setSelectedProduct(p)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#38bdf8' }}>{p.barcode}</td>
                   <td>{p.sku || '-'}</td>
                   <td style={{ fontWeight: '500' }}>{p.name}</td>
@@ -1018,7 +1255,9 @@ export default function Products({ token, products, categories, locations, suppl
                   <td>{formatHUF(p.sale_price_gross)}</td>
                   <td style={{ fontWeight: 'bold', color: p.current_stock <= p.minimum_stock ? '#ef4444' : '#22c55e' }}>{p.current_stock} db</td>
                   <td>
-                    {p.is_active ? (
+                    {p.is_archived ? (
+                      <span className="badge badge-secondary">Archivált</span>
+                    ) : p.is_active ? (
                       <span className="badge badge-success">Aktív</span>
                     ) : (
                       <span className="badge badge-danger">Inaktív</span>
@@ -1027,13 +1266,30 @@ export default function Products({ token, products, categories, locations, suppl
                   <td>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button 
-                        onClick={() => handleStartEdit(p)} 
+                        onClick={(e) => { e.stopPropagation(); handleStartEdit(p); }} 
                         style={{ padding: '4px 8px', backgroundColor: '#0284c7', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                       >
                         Szerkesztés
                       </button>
+                      
+                      {p.is_archived ? (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleRestoreProduct(p.id); }} 
+                          style={{ padding: '4px 8px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                        >
+                          Visszaállítás
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleArchiveProduct(p.id); }} 
+                          style={{ padding: '4px 8px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                        >
+                          Archiválás
+                        </button>
+                      )}
+
                       <button 
-                        onClick={() => handleDeleteProduct(p.id)} 
+                        onClick={(e) => { e.stopPropagation(); handleDeleteProduct(p.id); }} 
                         style={{ padding: '4px 8px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
                       >
                         Törlés
@@ -1046,6 +1302,141 @@ export default function Products({ token, products, categories, locations, suppl
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', fontSize: '13px', color: '#cbd5e1' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>Sorok száma oldalanként:</span>
+          <select 
+            value={limit} 
+            onChange={e => { setLimit(parseInt(e.target.value)); setPage(1); }}
+            style={{ padding: '6px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '4px' }}
+          >
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+          </select>
+          <span style={{ marginLeft: '12px', color: '#94a3b8' }}>Összesen {total} termék</span>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button 
+            disabled={page === 1} 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            style={{ padding: '6px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: page === 1 ? '#475569' : 'white', borderRadius: '4px', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+          >
+            Előző
+          </button>
+          
+          <span style={{ padding: '0 8px' }}>{page} / {pages} oldal</span>
+          
+          <button 
+            disabled={page === pages} 
+            onClick={() => setPage(p => Math.min(pages, p + 1))}
+            style={{ padding: '6px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: page === pages ? '#475569' : 'white', borderRadius: '4px', cursor: page === pages ? 'not-allowed' : 'pointer' }}
+          >
+            Következő
+          </button>
+        </div>
+      </div>
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 140 }}>
+          <div className="glass-panel" style={{ padding: '24px', width: '600px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, color: '#38bdf8' }}>Termék Részletes Adatai</h3>
+              <X size={20} onClick={() => setSelectedProduct(null)} style={{ cursor: 'pointer', color: '#64748b' }} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '13px' }}>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Termék név</span>
+                <strong>{selectedProduct.name}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Belső kód (Vonalkód)</span>
+                <strong style={{ fontFamily: 'monospace' }}>{selectedProduct.barcode}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Cikkszám (SKU)</span>
+                <span>{selectedProduct.sku || '-'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Gyártói cikkszám</span>
+                <span>{selectedProduct.manufacturer_sku || '-'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Külső EAN kód</span>
+                <span>{selectedProduct.ean || '-'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Mennyiségi egység</span>
+                <span>{selectedProduct.unit}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Beszerzési ár (Nettó)</span>
+                <strong>{formatHUF(selectedProduct.purchase_price_net)}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Beszerzési ár (Bruttó)</span>
+                <span>{formatHUF(selectedProduct.purchase_price_gross)} (ÁFA: {selectedProduct.vat_rate}%)</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Eladási ár (Nettó)</span>
+                <span>{formatHUF(selectedProduct.sale_price_net)}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Eladási ár (Bruttó)</span>
+                <strong>{formatHUF(selectedProduct.sale_price_gross)}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Aktuális raktárkészlet</span>
+                <strong style={{ color: selectedProduct.current_stock <= selectedProduct.minimum_stock ? '#ef4444' : '#22c55e' }}>{selectedProduct.current_stock} db</strong>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Minimális készlet</span>
+                <span>{selectedProduct.minimum_stock} db</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Készletkövetés</span>
+                <span>{selectedProduct.track_stock ? 'Engedélyezve' : 'Letiltva'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Negatív készlet engedélyezett</span>
+                <span>{selectedProduct.allow_negative_stock ? 'Igen' : 'Nem'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Billingo termék ID</span>
+                <span style={{ fontFamily: 'monospace' }}>{selectedProduct.billingo_product_id || 'Nincs szinkronizálva'}</span>
+              </div>
+              <div>
+                <span style={{ color: '#94a3b8', display: 'block' }}>Státusz</span>
+                <span className={selectedProduct.is_archived ? 'badge badge-danger' : 'badge badge-success'}>
+                  {selectedProduct.is_archived ? 'Archivált' : 'Aktív'}
+                </span>
+              </div>
+            </div>
+
+            {selectedProduct.description && (
+              <div style={{ fontSize: '13px', borderTop: '1px solid #1e293b', paddingTop: '12px' }}>
+                <span style={{ color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Leírás</span>
+                <p style={{ margin: 0, color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>{selectedProduct.description}</p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button 
+                onClick={() => setSelectedProduct(null)}
+                style={{ padding: '10px 24px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

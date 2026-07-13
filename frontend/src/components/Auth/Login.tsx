@@ -6,8 +6,8 @@ interface LoginProps {
 }
 
 export default function Login({ handleLoginSubmit, authError }: LoginProps) {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -60,10 +60,6 @@ export default function Login({ handleLoginSubmit, authError }: LoginProps) {
         >
           {loading ? 'Bejelentkezés...' : 'Bejelentkezés'}
         </button>
-        
-        <div style={{ textAlign: 'center', fontSize: '12px', color: '#475569' }}>
-          Alapértelmezett: admin / admin123
-        </div>
       </form>
     </div>
   );

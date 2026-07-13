@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from database import get_db
 from models import Product, User, UserRole
 from schemas import ProductCreate, ProductResponse
@@ -9,6 +9,7 @@ from barcode_utils import generate_next_barcode
 from audit_logger import log_audit
 from event_bus import event_bus
 from decimal import Decimal, ROUND_HALF_UP
+import math
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -25,20 +26,97 @@ def normalize_gross(net: int, gross: int, vat_rate: int) -> int:
     return expected_gross
 
 
-@router.get("", response_model=list[ProductResponse])
-async def list_products(q: str = None, db: AsyncSession = Depends(get_db)):
-    stmt = select(Product).where(Product.is_archived == False)
+@router.get("")
+async def list_products(
+    q: str = None,
+    all: bool = False,
+    page: int = 1,
+    limit: int = 50,
+    category_id: str = None,
+    supplier_id: str = None,
+    is_archived: bool = False,
+    stock_status: str = "all",
+    billingo_imported: str = "all",
+    sort_by: str = "name",
+    sort_order: str = "asc",
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Product)
+    
+    # 1. Archived filter
+    stmt = stmt.where(Product.is_archived == is_archived)
+    
+    # 2. Text Search
     if q:
         search_filter = or_(
             Product.name.ilike(f"%{q}%"),
             Product.barcode.ilike(f"%{q}%"),
             Product.ean.ilike(f"%{q}%"),
             Product.sku.ilike(f"%{q}%"),
-            Product.manufacturer_sku.ilike(f"%{q}%")
+            Product.manufacturer_sku.ilike(f"%{q}%"),
+            Product.billingo_product_id.ilike(f"%{q}%")
         )
         stmt = stmt.where(search_filter)
+        
+    # 3. Category Filter
+    if category_id:
+        stmt = stmt.where(Product.category_id == category_id)
+        
+    # 4. Supplier Filter
+    if supplier_id:
+        stmt = stmt.where(Product.supplier_id == supplier_id)
+        
+    # 5. Billingo Imported Filter
+    if billingo_imported == "true":
+        stmt = stmt.where(Product.billingo_product_id.isnot(None))
+    elif billingo_imported == "false":
+        stmt = stmt.where(Product.billingo_product_id.is_(None))
+        
+    # 6. Stock Status Filter
+    if stock_status == "low":
+        stmt = stmt.where(Product.track_stock == True, Product.minimum_stock > 0, Product.current_stock <= Product.minimum_stock)
+    elif stock_status == "in_stock":
+        stmt = stmt.where(Product.current_stock > 0)
+    elif stock_status == "out_of_stock":
+        stmt = stmt.where(Product.current_stock <= 0)
+    elif stock_status == "zero_stock":
+        stmt = stmt.where(Product.current_stock == 0)
+        
+    # 7. Sorting
+    col = getattr(Product, sort_by, Product.name)
+    if sort_order == "desc":
+        stmt = stmt.order_by(col.desc())
+    else:
+        stmt = stmt.order_by(col.asc())
+        
+    # Execution
+    if all:
+        result = await db.execute(stmt)
+        products = result.scalars().all()
+        return [ProductResponse.model_validate(p) for p in products]
+        
+    # Count total
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar() or 0
+    
+    # Paginate
+    offset = (page - 1) * limit
+    stmt = stmt.offset(offset).limit(limit)
+    
     result = await db.execute(stmt)
-    return result.scalars().all()
+    products = result.scalars().all()
+    
+    items = [ProductResponse.model_validate(p) for p in products]
+    pages = math.ceil(total / limit) if limit > 0 else 1
+    
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "limit": limit
+    }
 
 @router.post("", response_model=ProductResponse)
 async def create_product(prod: ProductCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER, UserRole.WAREHOUSE]))):
@@ -238,3 +316,44 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db), cu
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"Hiba a termék törlése során: {str(e)}")
+
+@router.post("/{product_id}/archive")
+async def archive_product(product_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER]))):
+    try:
+        result = await db.execute(select(Product).where(Product.id == product_id))
+        db_prod = result.scalar_one_or_none()
+        if not db_prod:
+            raise HTTPException(status_code=404, detail="A termék nem található")
+            
+        db_prod.is_archived = True
+        await log_audit(db, current_user.id, current_user.username, f"Termék archiválva: {db_prod.name} (id: {product_id})")
+        await db.commit()
+        
+        await event_bus.publish("inventory_events", "product_archived", {"id": product_id, "name": db_prod.name})
+        return {"status": "success", "message": f"Termék sikeresen archiválva: {db_prod.name}"}
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Hiba az archiválás során: {str(e)}")
+
+@router.post("/{product_id}/restore")
+async def restore_product(product_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER]))):
+    try:
+        result = await db.execute(select(Product).where(Product.id == product_id))
+        db_prod = result.scalar_one_or_none()
+        if not db_prod:
+            raise HTTPException(status_code=404, detail="A termék nem található")
+            
+        db_prod.is_archived = False
+        await log_audit(db, current_user.id, current_user.username, f"Termék visszaállítva az archívumból: {db_prod.name} (id: {product_id})")
+        await db.commit()
+        
+        await event_bus.publish("inventory_events", "product_restored", {"id": product_id, "name": db_prod.name})
+        return {"status": "success", "message": f"Termék sikeresen visszaállítva: {db_prod.name}"}
+    except Exception as e:
+        await db.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Hiba a visszaállítás során: {str(e)}")
+
