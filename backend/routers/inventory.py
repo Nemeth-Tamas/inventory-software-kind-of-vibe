@@ -259,7 +259,7 @@ async def apply_opening_stock(req: OpeningStockRequest, db: AsyncSession = Depen
         products_map = {p.id: p for p in products_res.scalars().all()}
         
         locations_res = await db.execute(select(Location).where(Location.id.in_(location_ids)))
-        locations_map = {l.id: l for l in locations_res.scalars().all()}
+        locations_map = {loc.id: loc for loc in locations_res.scalars().all()}
         
         # Check if any product has existing movements
         if not req.force_apply:
@@ -447,8 +447,8 @@ async def import_preview(file: UploadFile = File(...), db: AsyncSession = Depend
         
         loc_res = await db.execute(select(Location))
         all_locations = loc_res.scalars().all()
-        locations_by_name = {l.name.lower().strip(): l for l in all_locations}
-        locations_by_id = {l.id: l for l in all_locations}
+        locations_by_name = {loc.name.lower().strip(): loc for loc in all_locations}
+        locations_by_id = {loc.id: loc for loc in all_locations}
         
         preview_rows = []
         seen_barcodes = set()

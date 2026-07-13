@@ -9,7 +9,7 @@ def wait_for_postgres():
     start_time = time.time()
     while True:
         try:
-            with socket.create_connection((host, port), timeout=1.0) as s:
+            with socket.create_connection((host, port), timeout=1.0):
                 print("Postgres database is ready!")
                 return True
         except (socket.timeout, ConnectionRefusedError):

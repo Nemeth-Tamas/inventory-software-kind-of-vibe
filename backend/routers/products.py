@@ -95,7 +95,7 @@ async def list_products(
         
     # 6. Stock Status Filter
     if stock_status == "low":
-        stmt = stmt.where(Product.track_stock == True, Product.minimum_stock > 0, Product.current_stock <= Product.minimum_stock)
+        stmt = stmt.where(Product.track_stock, Product.minimum_stock > 0, Product.current_stock <= Product.minimum_stock)
     elif stock_status == "in_stock":
         stmt = stmt.where(Product.current_stock > 0)
     elif stock_status == "out_of_stock":

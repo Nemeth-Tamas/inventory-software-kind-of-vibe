@@ -1,10 +1,9 @@
 import pytest
 import re
-import os
 from unittest.mock import patch
 
 # Import backup_manager components
-from backup_manager import rotate_backups, verify_backup_file
+from backup_manager import rotate_backups
 
 def test_backup_filename_pattern():
     pattern = re.compile(r"^inventory_\d{4}-\d{2}-\d{2}_\d{6}\.dump$")

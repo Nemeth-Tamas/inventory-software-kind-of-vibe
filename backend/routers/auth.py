@@ -64,7 +64,7 @@ async def is_final_active_admin(user_id: str, db: AsyncSession) -> bool:
     count_res = await db.execute(
         select(func.count(User.id))
         .where(User.role == UserRole.ADMIN)
-        .where(User.is_active == True)
+        .where(User.is_active)
     )
     active_admins_count = count_res.scalar()
     return active_admins_count <= 1

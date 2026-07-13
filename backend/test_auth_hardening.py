@@ -109,7 +109,7 @@ async def test_auth_hardening_endpoints():
             assert demote_resp.status_code == 200
 
             # Now auth_admin1 is the final active admin. Try to demote auth_admin1 -> should fail with 400
-            demote_fail = await client.put(
+            await client.put(
                 f"/auth/users/{admin1_id}/role",
                 headers=headers_admin2, # authenticate as admin2 (now sales) or admin1? wait, admin2 is demoted.
                 # Actually, try to demote admin1 using a request, but we must use admin1 credentials since they are still admin

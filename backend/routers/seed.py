@@ -27,7 +27,7 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
     try:
         # Get Locations
         locs_res = await db.execute(select(Location))
-        locs = {l.name: l.id for l in locs_res.scalars().all()}
+        locs = {loc.name: loc.id for loc in locs_res.scalars().all()}
         
         # Get Categories
         cats_res = await db.execute(select(Category))

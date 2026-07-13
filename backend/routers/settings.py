@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -6,18 +6,17 @@ from database import get_db
 from models import User, UserRole, SystemSetting
 from auth import require_role
 from audit_logger import log_audit
-from settings_utils import encrypt_val, decrypt_val
+from settings_utils import encrypt_val
 from pydantic import BaseModel
 from typing import Optional
 import os
 import re
 import json
 import asyncio
-import pytz
 from datetime import datetime, timedelta
 
 # Import backup manager details
-from backup_manager import BACKUP_DIR, STATUS_FILE, HISTORY_FILE, TZ, verify_backup_file
+from backup_manager import BACKUP_DIR, STATUS_FILE, HISTORY_FILE, TZ
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 

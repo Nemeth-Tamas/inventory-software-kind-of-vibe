@@ -37,7 +37,7 @@ async def create_stocktake(name: str, notes: Optional[str] = None, db: AsyncSess
         await db.flush()
         
         # Take a snapshot of all active products and freeze expected stock
-        result = await db.execute(select(Product).where(Product.is_archived == False))
+        result = await db.execute(select(Product).where(Product.is_archived.is_(False)))
         products = result.scalars().all()
         
         for p in products:
@@ -147,7 +147,7 @@ async def list_unresolved_scans(stocktake_id: str, db: AsyncSession = Depends(ge
         select(StocktakeUnknownBarcode)
         .options(selectinload(StocktakeUnknownBarcode.user))
         .where(
-            (StocktakeUnknownBarcode.stocktake_id == stocktake_id) & (StocktakeUnknownBarcode.resolved == False)
+            (StocktakeUnknownBarcode.stocktake_id == stocktake_id) & (StocktakeUnknownBarcode.resolved.is_(False))
         )
     )
     return [

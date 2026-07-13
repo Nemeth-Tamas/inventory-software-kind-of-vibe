@@ -1,5 +1,4 @@
 import asyncio
-import os
 from models import User, UserRole, Category, Supplier, Location
 from database import AsyncSessionLocal
 from auth import get_password_hash
@@ -11,7 +10,6 @@ async def init_database():
     admin_password = settings.ADMIN_PASSWORD
     
     # Force password change if default admin username/password is used (only in development)
-    must_change = (admin_username == "admin" and admin_password == "admin123")
     
     async with AsyncSessionLocal() as session:
         # Check if any admin exists in the database

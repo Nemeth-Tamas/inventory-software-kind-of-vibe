@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/excel", tags=["excel"])
 
 @router.get("/export/products")
 async def export_products(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Product).where(Product.is_archived == False))
+    result = await db.execute(select(Product).where(Product.is_archived.is_(False)))
     products = result.scalars().all()
 
     wb = openpyxl.Workbook()

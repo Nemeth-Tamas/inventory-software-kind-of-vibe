@@ -1,4 +1,3 @@
-import pytest
 from decimal import Decimal, ROUND_HALF_UP
 from routers.products import calculate_gross, normalize_gross
 

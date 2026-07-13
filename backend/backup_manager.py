@@ -363,8 +363,8 @@ async def verify_command(filename, latest=False):
         res = subprocess.run(cmd, env=env, capture_output=True, text=True)
         lines = res.stdout.splitlines()[:15]
         print("Backup Contents Summary:")
-        for l in lines:
-            print("  ", l)
+        for line in lines:
+            print("  ", line)
         if len(lines) > 15:
             print("   ...")
     else:
@@ -420,7 +420,7 @@ async def run_restore_temp(filename, latest=False):
     ]
     
     print("Running pg_restore...")
-    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    subprocess.run(cmd, env=env, capture_output=True, text=True)
     
     print("Connecting to temporary database to verify schema and contents...")
     success = False
@@ -471,7 +471,7 @@ async def run_restore_temp(filename, latest=False):
             port=DB_CREDS["port"]
         )
         try:
-            await conn.execute(f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", temp_db_name)
+            await conn.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1", temp_db_name)
             await conn.execute(f"DROP DATABASE IF EXISTS {temp_db_name}")
         finally:
             await conn.close()
@@ -556,7 +556,7 @@ async def run_restore_live(filename, confirm):
         await conn.execute(f"REVOKE CONNECT ON DATABASE {target_db} FROM public")
         await conn.execute(f"REVOKE CONNECT ON DATABASE {target_db} FROM {DB_CREDS['user']}")
         await conn.execute(
-            f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
             target_db
         )
         
@@ -579,7 +579,7 @@ async def run_restore_live(filename, confirm):
         filepath
     ]
     
-    res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    subprocess.run(cmd, env=env, capture_output=True, text=True)
     
     print("Re-enabling database connect privileges...")
     conn = await asyncpg.connect(

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, or_, func
+from sqlalchemy import select, update, or_, func
 from database import get_db
 from models import Category, Supplier, Location, User, UserRole, Product
 from schemas import CategoryBase, CategoryResponse, LocationBase, LocationResponse, SupplierBase, SupplierResponse, MergeRequest
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api", tags=["master_data"])
 async def get_categories(q: str = None, all_items: bool = True, db: AsyncSession = Depends(get_db)):
     stmt = select(Category)
     if not all_items:
-        stmt = stmt.where(Category.is_archived == False)
+        stmt = stmt.where(Category.is_archived.is_(False))
     if q:
         stmt = stmt.where(Category.name.ilike(f"%{q}%"))
     result = await db.execute(stmt)
@@ -126,7 +126,7 @@ async def get_categories_with_count(db: AsyncSession = Depends(get_db)):
 async def get_locations(q: str = None, all_items: bool = True, db: AsyncSession = Depends(get_db)):
     stmt = select(Location)
     if not all_items:
-        stmt = stmt.where(Location.is_archived == False)
+        stmt = stmt.where(Location.is_archived.is_(False))
     if q:
         stmt = stmt.where(Location.name.ilike(f"%{q}%"))
     result = await db.execute(stmt)
@@ -224,7 +224,7 @@ async def get_locations_with_stock(db: AsyncSession = Depends(get_db)):
 async def get_suppliers(q: str = None, all_items: bool = True, db: AsyncSession = Depends(get_db)):
     stmt = select(Supplier)
     if not all_items:
-        stmt = stmt.where(Supplier.is_archived == False)
+        stmt = stmt.where(Supplier.is_archived.is_(False))
     if q:
         search_filter = or_(
             Supplier.name.ilike(f"%{q}%"),

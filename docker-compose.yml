@@ -68,6 +68,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - BILLINGO_API_KEY=${BILLINGO_API_KEY:-}
       - ALLOW_MOCK_BILLINGO=false
+      - ADMIN_USER=${ADMIN_USER:?ADMIN_USER is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,6 +86,9 @@ services:
     environment:
       - APP_ENV=production
       - DATABASE_URL=postgresql+asyncpg://inventory_user:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/inventory
+      - ADMIN_USER=${ADMIN_USER:?ADMIN_USER is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
     volumes:
       - ./backups:/app/backups
     depends_on:

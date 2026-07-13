@@ -318,7 +318,6 @@ async def test_master_data_operations():
     admin_user = None
     cat_id = None
     sup_id = None
-    loc_id = None
 
     try:
         async with AsyncSessionLocal() as session:
@@ -532,7 +531,7 @@ async def test_product_creation_rollback_on_failure():
             }
             resp1 = await client.post("/products", json=payload1, headers=headers)
             assert resp1.status_code == 200
-            prod1_id = resp1.json()["id"]
+            resp1.json()["id"]
             
             # Try to create a second product with the same SKU (must fail and rollback)
             payload2 = {

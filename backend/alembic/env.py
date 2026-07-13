@@ -4,6 +4,8 @@ from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from alembic import context
+from models import Base
+import models_inventory # noqa
 
 # This is the Alembic Config object, which provides access to the values within the .ini file.
 config = context.config
@@ -11,10 +13,6 @@ config = context.config
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# Import models to ensure their metadata is registered.
-from models import Base
-import models_inventory # noqa
 
 target_metadata = Base.metadata
 

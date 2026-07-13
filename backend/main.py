@@ -1,13 +1,9 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
-from barcode_utils import generate_next_barcode
 from routers import auth, master_data, products, inventory, stocktake, billingo, excel, audit, events, seed, settings as settings_router, health
+from config import settings
 
 app = FastAPI(title="Raktárkezelő API", version="1.0.0")
-
-from config import settings
 
 # CORS middleware configuration
 origins = []

@@ -1,7 +1,13 @@
 import pytest
+import httpx
 from unittest.mock import MagicMock
-from barcode_utils import generate_next_barcode
-from models import BarcodeSequence
+from sqlalchemy import delete
+
+from main import app
+from database import AsyncSessionLocal
+from models import BarcodeSequence, User, UserRole, AuditLog
+from auth import get_password_hash
+from barcode_utils import generate_next_barcode, get_next_barcode_preview
 
 class MockDB:
     def __init__(self):
@@ -60,8 +66,6 @@ async def test_barcode_exhausted():
     assert "megtelt" in str(excinfo.value)
 
 
-from barcode_utils import get_next_barcode_preview
-
 @pytest.mark.asyncio
 async def test_barcode_preview_no_burn():
     db = MockDB()
@@ -78,13 +82,6 @@ async def test_barcode_preview_no_burn():
     assert actual_barcode == "26002B"
     assert db.seq.current_counter == 43
 
-
-from main import app
-from database import AsyncSessionLocal
-from models import User, UserRole, AuditLog
-from auth import get_password_hash
-from sqlalchemy import delete
-import httpx
 
 @pytest.mark.anyio
 async def test_barcode_endpoint_security_and_preview():
@@ -146,4 +143,3 @@ async def test_barcode_endpoint_security_and_preview():
             await session.execute(delete(AuditLog).where(AuditLog.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
             await session.execute(delete(User).where(User.username.in_(["barcode_admin", "barcode_unauth", "barcode_warehouse"])))
             await session.commit()
-

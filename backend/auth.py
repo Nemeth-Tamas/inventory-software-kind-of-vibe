@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -31,7 +31,6 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-from fastapi import Request
 
 async def get_current_user(request: Request = None, token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
