@@ -64,6 +64,13 @@ Az adatbázis inicializálása után a rendszer létrehoz egy alapértelmezett r
 
 Az első bejelentkezés után a rendszer azonnal kéri a jelszó megváltoztatását (kötelező jelszócsere szabály).
 
+### Adminisztrátori jelszó helyreállítása (CLI):
+Ha elfelejtette a jelszót, vagy a produkciós telepítés után az adatbázisban már létező adminisztrátori fiók miatt az `.env` fájlban megadott jelszó nem lépett életbe, futtassa a helyreállító scriptet a backend konténeren belül:
+```bash
+docker compose exec backend python reset_admin_password.py <felhasználónév> <új_jelszó>
+```
+Ez a parancs beállítja az új jelszót, feloldja a kötelező jelszócserét és aktiválja a fiókot.
+
 ---
 
 ## 5. Billingo V3 Integráció részletei
