@@ -69,6 +69,13 @@ async def init_database():
             ]
             session.add_all(suppliers)
             print("Default suppliers created.")
+        # Check and add supplier_id to inventory_movements table
+        from sqlalchemy import text
+        try:
+            await session.execute(text("ALTER TABLE inventory_movements ADD COLUMN supplier_id VARCHAR REFERENCES suppliers(id)"))
+            print("Added supplier_id column to inventory_movements table.")
+        except Exception:
+            pass
             
         await session.commit()
 

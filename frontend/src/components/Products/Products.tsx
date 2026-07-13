@@ -50,11 +50,8 @@ export default function Products({ token, categories, locations, suppliers, fetc
   // Combobox Search States
   const [catSearch, setCatSearch] = useState('');
   const [showCatDropdown, setShowCatDropdown] = useState(false);
-  const [supSearch, setSupSearch] = useState('');
-  const [showSupDropdown, setShowSupDropdown] = useState(false);
 
   const catRef = useRef<HTMLDivElement>(null);
-  const supRef = useRef<HTMLDivElement>(null);
 
   // Edit Product States
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
@@ -80,11 +77,8 @@ export default function Products({ token, categories, locations, suppliers, fetc
 
   const [editCatSearch, setEditCatSearch] = useState('');
   const [showEditCatDropdown, setShowEditCatDropdown] = useState(false);
-  const [editSupSearch, setEditSupSearch] = useState('');
-  const [showEditSupDropdown, setShowEditSupDropdown] = useState(false);
 
   const editCatRef = useRef<HTMLDivElement>(null);
-  const editSupRef = useRef<HTMLDivElement>(null);
 
   // Paginated List & Filter States
   const [paginatedProducts, setPaginatedProducts] = useState<any[]>([]);
@@ -203,14 +197,8 @@ export default function Products({ token, categories, locations, suppliers, fetc
       if (catRef.current && !catRef.current.contains(e.target as Node)) {
         setShowCatDropdown(false);
       }
-      if (supRef.current && !supRef.current.contains(e.target as Node)) {
-        setShowSupDropdown(false);
-      }
       if (editCatRef.current && !editCatRef.current.contains(e.target as Node)) {
         setShowEditCatDropdown(false);
-      }
-      if (editSupRef.current && !editSupRef.current.contains(e.target as Node)) {
-        setShowEditSupDropdown(false);
       }
     };
     window.addEventListener('mousedown', handleOutsideClick);
@@ -340,7 +328,6 @@ export default function Products({ token, categories, locations, suppliers, fetc
         const newSup = await response.json();
         fetchData();
         setNewProdSupplier(newSup.id);
-        setSupSearch(newSup.name);
         setQuickSupName('');
         setQuickSupContact('');
         setQuickSupEmail('');
@@ -405,7 +392,6 @@ export default function Products({ token, categories, locations, suppliers, fetc
         setNewProdSupplier('');
         setNewProdLocation('');
         setCatSearch('');
-        setSupSearch('');
       } else {
         const err = await response.json();
         alert(`Hiba termék létrehozása során: ${err.detail}`);
@@ -467,8 +453,6 @@ export default function Products({ token, categories, locations, suppliers, fetc
 
     const cat = categories.find(c => c.id === p.category_id);
     setEditCatSearch(cat ? cat.name : '');
-    const sup = suppliers.find(s => s.id === p.supplier_id);
-    setEditSupSearch(sup ? sup.name : '');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -775,68 +759,7 @@ export default function Products({ token, categories, locations, suppliers, fetc
                 )}
               </div>
 
-              {/* Supplier Searchable Autocomplete Combobox */}
-              <div ref={supRef} style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Beszállító</label>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input 
-                      type="text" 
-                      value={supSearch}
-                      onChange={e => {
-                        setSupSearch(e.target.value);
-                        setShowSupDropdown(true);
-                      }}
-                      onFocus={() => setShowSupDropdown(true)}
-                      placeholder="Keressen beszállítót..."
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', borderRadius: '6px' }}
-                    />
-                    <ChevronDown size={16} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b', pointerEvents: 'none' }} />
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowAddSupplierModal(true)} 
-                    style={{ padding: '8px 12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#38bdf8', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    + Új
-                  </button>
-                </div>
 
-                {showSupDropdown && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a',
-                    border: '1px solid #1e293b', borderRadius: '6px', zIndex: 110, maxHeight: '180px', overflowY: 'auto',
-                    boxShadow: '0 8px 16px rgba(0,0,0,0.5)', marginTop: '4px'
-                  }}>
-                    <div 
-                      onClick={() => {
-                        setNewProdSupplier('');
-                        setSupSearch('');
-                        setShowSupDropdown(false);
-                      }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', color: '#64748b' }}
-                      className="search-item-hover"
-                    >
-                      (Nincs beszállító)
-                    </div>
-                    {suppliers.filter(s => !s.is_archived && s.is_active && s.name.toLowerCase().includes(supSearch.toLowerCase())).map(s => (
-                      <div 
-                        key={s.id} 
-                        onClick={() => {
-                          setNewProdSupplier(s.id);
-                          setSupSearch(s.name);
-                          setShowSupDropdown(false);
-                        }}
-                        style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        className="search-item-hover"
-                      >
-                        <span>{s.name}</span>
-                        {newProdSupplier === s.id && <Check size={14} style={{ color: '#0284c7' }} />}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
             </div>
 
@@ -998,61 +921,7 @@ export default function Products({ token, categories, locations, suppliers, fetc
                 )}
               </div>
 
-              {/* Edit Supplier Autocomplete Combobox */}
-              <div ref={editSupRef} style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Beszállító</label>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <input 
-                      type="text" 
-                      value={editSupSearch}
-                      onChange={e => {
-                        setEditSupSearch(e.target.value);
-                        setShowEditSupDropdown(true);
-                      }}
-                      onFocus={() => setShowEditSupDropdown(true)}
-                      placeholder="Keressen beszállítót..."
-                      style={{ width: '100%', padding: '8px', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', borderRadius: '6px' }}
-                    />
-                    <ChevronDown size={16} style={{ position: 'absolute', right: '10px', top: '10px', color: '#64748b', pointerEvents: 'none' }} />
-                  </div>
-                </div>
 
-                {showEditSupDropdown && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a',
-                    border: '1px solid #1e293b', borderRadius: '6px', zIndex: 110, maxHeight: '180px', overflowY: 'auto',
-                    boxShadow: '0 8px 16px rgba(0,0,0,0.5)', marginTop: '4px'
-                  }}>
-                    <div 
-                      onClick={() => {
-                        setEditSupplier('');
-                        setEditSupSearch('');
-                        setShowEditSupDropdown(false);
-                      }}
-                      style={{ padding: '8px 12px', cursor: 'pointer', color: '#64748b' }}
-                      className="search-item-hover"
-                    >
-                      (Nincs beszállító)
-                    </div>
-                    {suppliers.filter(s => !s.is_archived && s.is_active && s.name.toLowerCase().includes(editSupSearch.toLowerCase())).map(s => (
-                      <div 
-                        key={s.id} 
-                        onClick={() => {
-                          setEditSupplier(s.id);
-                          setEditSupSearch(s.name);
-                          setShowEditSupDropdown(false);
-                        }}
-                        style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        className="search-item-hover"
-                      >
-                        <span>{s.name}</span>
-                        {editSupplier === s.id && <Check size={14} style={{ color: '#0284c7' }} />}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
             </div>
 

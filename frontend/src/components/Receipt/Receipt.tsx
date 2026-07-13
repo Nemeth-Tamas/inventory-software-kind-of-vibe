@@ -11,15 +11,19 @@ interface ReceiptProps {
   setReceiptLocation: (val: string) => void;
   receiptRef: string;
   setReceiptRef: (val: string) => void;
+  receiptSupplier: string;
+  setReceiptSupplier: (val: string) => void;
   locations: any[];
   fetchData: () => void;
   products: any[];
   playBeep: (freq?: number, duration?: number, volume?: number) => void;
+  suppliers: any[];
 }
 
 export default function Receipt({
   token, receiptCart, setReceiptCart, receiptLocation, setReceiptLocation,
-  receiptRef, setReceiptRef, locations, fetchData, products, playBeep
+  receiptRef, setReceiptRef, receiptSupplier, setReceiptSupplier, locations, 
+  fetchData, products, playBeep, suppliers
 }: ReceiptProps) {
   
   const [scanInput, setScanInput] = useState('');
@@ -268,6 +272,7 @@ export default function Receipt({
         body: JSON.stringify({
           items: receiptCart.map(i => ({ product_id: i.product_id, quantity: i.quantity, purchase_price_net: i.price_net })),
           location_id: receiptLocation,
+          supplier_id: receiptSupplier || null,
           reference_number: receiptRef
         })
       });
@@ -275,6 +280,7 @@ export default function Receipt({
         confetti();
         setReceiptCart([]);
         setReceiptRef('');
+        setReceiptSupplier('');
         setLastScanned(null);
         showFeedback("Bevételezés sikeresen véglegesítve!", 'success');
         fetchData();
@@ -511,6 +517,24 @@ export default function Receipt({
               >
                 <option value="">Válasszon cél raktárhelyet...</option>
                 {locations.filter(l => !l.is_archived).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Beszállító</label>
+              <select 
+                value={receiptSupplier} 
+                onChange={e => setReceiptSupplier(e.target.value)} 
+                style={{
+                  width: '100%', padding: '10px', backgroundColor: '#0f172a', 
+                  border: '1px solid #334155',
+                  color: '#f8fafc', borderRadius: '6px'
+                }}
+              >
+                <option value="">Válasszon beszállítót (opcionális)...</option>
+                {suppliers.filter(s => !s.is_archived && s.is_active).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
               </select>
             </div>
 

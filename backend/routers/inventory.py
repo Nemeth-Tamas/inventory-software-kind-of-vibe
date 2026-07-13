@@ -78,6 +78,7 @@ async def goods_receipt(req: ReceiptRequest, db: AsyncSession = Depends(get_db),
                 stock_before=stock_before,
                 stock_after=product.current_stock,
                 destination_location_id=req.location_id,
+                supplier_id=req.supplier_id,
                 movement_type=MovementType.RECEIPT,
                 reason="Bevételezés",
                 reference_number=req.reference_number,
@@ -190,7 +191,11 @@ async def stock_transfer(req: TransferRequest, db: AsyncSession = Depends(get_db
 async def get_movements(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(InventoryMovement)
-        .options(selectinload(InventoryMovement.product), selectinload(InventoryMovement.user))
+        .options(
+            selectinload(InventoryMovement.product),
+            selectinload(InventoryMovement.user),
+            selectinload(InventoryMovement.supplier)
+        )
         .order_by(InventoryMovement.timestamp.desc())
         .limit(100)
     )
@@ -206,7 +211,8 @@ async def get_movements(db: AsyncSession = Depends(get_db)):
             "movement_type": m.movement_type.value,
             "reason": m.reason,
             "timestamp": m.timestamp.isoformat(),
-            "user": m.user.username if m.user else "Rendszer"
+            "user": m.user.username if m.user else "Rendszer",
+            "supplier_name": m.supplier.name if m.supplier else ""
         }
         for m in movements
     ]

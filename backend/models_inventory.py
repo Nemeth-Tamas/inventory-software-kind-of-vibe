@@ -22,6 +22,7 @@ class InventoryMovement(Base):
     stock_after = Column(Integer, nullable=False)
     source_location_id = Column(String, ForeignKey("locations.id"))
     destination_location_id = Column(String, ForeignKey("locations.id"))
+    supplier_id = Column(String, ForeignKey("suppliers.id"))
     movement_type = Column(Enum(MovementType), nullable=False)
     reason = Column(String)
     reference_number = Column(String)
@@ -34,6 +35,7 @@ class InventoryMovement(Base):
     user = relationship("User")
     source_location = relationship("Location", foreign_keys=[source_location_id])
     destination_location = relationship("Location", foreign_keys=[destination_location_id])
+    supplier = relationship("Supplier")
 
 class StocktakeStatus(str, enum.Enum):
     DRAFT = "Piszkozat"

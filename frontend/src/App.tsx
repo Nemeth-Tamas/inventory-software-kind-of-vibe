@@ -47,6 +47,7 @@ export default function App() {
   const [receiptCart, setReceiptCart] = useState<any[]>([]);
   const [receiptLocation, setReceiptLocation] = useState('');
   const [receiptRef, setReceiptRef] = useState('');
+  const [receiptSupplier, setReceiptSupplier] = useState('');
   
   // Kiadás (Stock Issue) State
   const [issueCart, setIssueCart] = useState<any[]>([]);
@@ -377,10 +378,13 @@ export default function App() {
             setReceiptLocation={setReceiptLocation} 
             receiptRef={receiptRef} 
             setReceiptRef={setReceiptRef} 
+            receiptSupplier={receiptSupplier}
+            setReceiptSupplier={setReceiptSupplier}
             locations={locations} 
             fetchData={fetchData} 
             products={products}
             playBeep={playBeep}
+            suppliers={suppliers}
           />
         );
       case 'issue':
