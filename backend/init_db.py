@@ -73,9 +73,18 @@ async def init_database():
         from sqlalchemy import text
         try:
             await session.execute(text("ALTER TABLE inventory_movements ADD COLUMN supplier_id VARCHAR REFERENCES suppliers(id)"))
+            await session.commit()
             print("Added supplier_id column to inventory_movements table.")
         except Exception:
-            pass
+            await session.rollback()
+
+        # Check and add price_net to inventory_movements table
+        try:
+            await session.execute(text("ALTER TABLE inventory_movements ADD COLUMN price_net INTEGER"))
+            await session.commit()
+            print("Added price_net column to inventory_movements table.")
+        except Exception:
+            await session.rollback()
             
         await session.commit()
 

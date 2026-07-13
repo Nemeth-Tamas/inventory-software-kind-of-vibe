@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, AlertTriangle, Scan, CheckCircle, Search, Info } from 'lucide-react';
+import { Trash2, AlertTriangle, Scan, CheckCircle, Search, Info, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { API_BASE } from '../../config';
 
@@ -29,7 +29,28 @@ export default function Issue({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [lastScanned, setLastScanned] = useState<any>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'warn' | 'info' } | null>(null);
-  
+  // History Modal States
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyMovements, setHistoryMovements] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/inventory/movements`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHistoryMovements(data.filter((m: any) => m.movement_type === "Kiadás/Értékesítés"));
+      }
+    } catch (err) {
+      console.error("Error fetching issue history:", err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto focus input on mount
@@ -211,7 +232,18 @@ export default function Issue({
 
   return (
     <div>
-      <h1 style={{ fontSize: '24px', margin: '0 0 20px 0' }}>Kiadás</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '24px', margin: 0 }}>Kiadás</h1>
+        <button 
+          onClick={() => {
+            setShowHistoryModal(true);
+            fetchHistory();
+          }}
+          style={{ padding: '8px 16px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Korábbi kiadások
+        </button>
+      </div>
 
       {/* Feedback Messages */}
       {feedbackMsg && (
@@ -489,6 +521,65 @@ export default function Issue({
 
         </div>
       </div>
+      {/* Issue History Modal */}
+      {showHistoryModal && (
+        <div 
+          onClick={e => { if (e.target === e.currentTarget) setShowHistoryModal(false); }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 140 }}
+        >
+          <div className="glass-panel" style={{ padding: '24px', width: '850px', maxWidth: '95vw', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, color: '#f87171' }}>Korábbi kiadások</h3>
+              <X size={20} onClick={() => setShowHistoryModal(false)} style={{ cursor: 'pointer', color: '#64748b' }} />
+            </div>
+
+            {historyLoading ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>Betöltés...</div>
+            ) : historyMovements.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>Nincs korábbi kiadás.</div>
+            ) : (
+              <div className="table-container" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+                <table className="dense-table">
+                  <thead>
+                    <tr>
+                      <th>Dátum</th>
+                      <th>Bizonylatszám</th>
+                      <th>Termék</th>
+                      <th>Vonalkód</th>
+                      <th>Mennyiség</th>
+                      <th>Ok / Cél</th>
+                      <th>Felhasználó</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyMovements.map((m, idx) => (
+                      <tr key={idx}>
+                        <td>{new Date(m.timestamp).toLocaleString('hu-HU')}</td>
+                        <td>{m.reference_number || '-'}</td>
+                        <td style={{ fontWeight: '500' }}>{m.product_name}</td>
+                        <td style={{ fontFamily: 'monospace' }}>{m.barcode}</td>
+                        <td style={{ fontWeight: 'bold', color: '#f87171' }}>{m.quantity_delta} db</td>
+                        <td>{m.reason || '-'}</td>
+                        <td>{m.user}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+              <button 
+                onClick={() => setShowHistoryModal(false)} 
+                style={{ padding: '8px 16px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

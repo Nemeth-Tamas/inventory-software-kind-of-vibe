@@ -79,6 +79,7 @@ async def goods_receipt(req: ReceiptRequest, db: AsyncSession = Depends(get_db),
                 stock_after=product.current_stock,
                 destination_location_id=req.location_id,
                 supplier_id=req.supplier_id,
+                price_net=item.purchase_price_net,
                 movement_type=MovementType.RECEIPT,
                 reason="Bevételezés",
                 reference_number=req.reference_number,
@@ -212,7 +213,8 @@ async def get_movements(db: AsyncSession = Depends(get_db)):
             "reason": m.reason,
             "timestamp": m.timestamp.isoformat(),
             "user": m.user.username if m.user else "Rendszer",
-            "supplier_name": m.supplier.name if m.supplier else ""
+            "supplier_name": m.supplier.name if m.supplier else "",
+            "price_net": m.price_net
         }
         for m in movements
     ]

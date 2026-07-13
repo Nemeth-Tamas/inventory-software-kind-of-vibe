@@ -23,6 +23,7 @@ class InventoryMovement(Base):
     source_location_id = Column(String, ForeignKey("locations.id"))
     destination_location_id = Column(String, ForeignKey("locations.id"))
     supplier_id = Column(String, ForeignKey("suppliers.id"))
+    price_net = Column(Integer)
     movement_type = Column(Enum(MovementType), nullable=False)
     reason = Column(String)
     reference_number = Column(String)
