@@ -5,6 +5,7 @@ from models import Base
 import uuid
 from datetime import datetime
 
+
 class MovementType(str, enum.Enum):
     OPENING = "Nyitó egyenleg"
     RECEIPT = "Bevételezés"
@@ -12,6 +13,7 @@ class MovementType(str, enum.Enum):
     TRANSFER = "Átadás helyszínek között"
     CORRECTION = "Készletkorrekció"
     DAMAGE = "Selejtezés/Sérülés"
+
 
 class InventoryMovement(Base):
     __tablename__ = "inventory_movements"
@@ -35,8 +37,11 @@ class InventoryMovement(Base):
     product = relationship("Product")
     user = relationship("User")
     source_location = relationship("Location", foreign_keys=[source_location_id])
-    destination_location = relationship("Location", foreign_keys=[destination_location_id])
+    destination_location = relationship(
+        "Location", foreign_keys=[destination_location_id]
+    )
     supplier = relationship("Supplier")
+
 
 class StocktakeStatus(str, enum.Enum):
     DRAFT = "Piszkozat"
@@ -45,17 +50,23 @@ class StocktakeStatus(str, enum.Enum):
     COMPLETED = "Lezárt"
     APPLIED = "Javítás alkalmazva"
 
+
 class Stocktake(Base):
     __tablename__ = "stocktakes"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
-    status = Column(Enum(StocktakeStatus), default=StocktakeStatus.DRAFT, nullable=False)
+    status = Column(
+        Enum(StocktakeStatus), default=StocktakeStatus.DRAFT, nullable=False
+    )
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_by = Column(String, ForeignKey("users.id"))
     notes = Column(String)
 
     creator = relationship("User")
-    items = relationship("StocktakeItem", back_populates="stocktake", cascade="all, delete-orphan")
+    items = relationship(
+        "StocktakeItem", back_populates="stocktake", cascade="all, delete-orphan"
+    )
+
 
 class StocktakeItem(Base):
     __tablename__ = "stocktake_items"
@@ -70,6 +81,7 @@ class StocktakeItem(Base):
     stocktake = relationship("Stocktake", back_populates="items")
     product = relationship("Product")
 
+
 class StocktakeUnknownBarcode(Base):
     __tablename__ = "stocktake_unknown_barcodes"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -81,11 +93,10 @@ class StocktakeUnknownBarcode(Base):
     resolved_product_id = Column(String, ForeignKey("products.id"))
     resolved_user_id = Column(String, ForeignKey("users.id"))
     resolved_at = Column(DateTime)
-    resolution_type = Column(String) # e.g. "linked", "ignored"
+    resolution_type = Column(String)  # e.g. "linked", "ignored"
     ignore_reason = Column(String)
 
     stocktake = relationship("Stocktake")
     user = relationship("User", foreign_keys=[user_id])
     resolved_product = relationship("Product")
     resolved_user = relationship("User", foreign_keys=[resolved_user_id])
-

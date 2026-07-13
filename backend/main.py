@@ -1,6 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, master_data, products, inventory, stocktake, billingo, excel, audit, events, seed, settings as settings_router, health
+from routers import (
+    auth,
+    master_data,
+    products,
+    inventory,
+    stocktake,
+    billingo,
+    excel,
+    audit,
+    events,
+    seed,
+    settings as settings_router,
+    health,
+)
 from config import settings
 
 app = FastAPI(title="Raktárkezelő API", version="1.0.0")
@@ -14,7 +27,7 @@ elif settings.APP_ENV == "development":
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:18080",
-        "http://127.0.0.1:18080"
+        "http://127.0.0.1:18080",
     ]
 
 if origins:
@@ -40,8 +53,7 @@ app.include_router(settings_router.router)
 app.include_router(seed.router)
 app.include_router(health.router)
 
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok", "system": "Raktárkezelő API"}
-
-

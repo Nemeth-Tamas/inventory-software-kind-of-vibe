@@ -12,23 +12,30 @@ from config import settings
 
 router = APIRouter(prefix="/api/seed", tags=["seed"])
 
+
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def seed_development_data(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role([UserRole.ADMIN]))):
+async def seed_development_data(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+):
     if not settings.ALLOW_SEEDING:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="A demo adatok betöltése le van tiltva ebben a környezetben!"
+            detail="A demo adatok betöltése le van tiltva ebben a környezetben!",
         )
     # Verify if products are already seeded
     p_check = await db.execute(select(Product).limit(1))
     if p_check.scalars().first():
-        return {"status": "skipped", "message": "Az adatbázis már tartalmaz termékeket. A feltöltés kihagyva."}
+        return {
+            "status": "skipped",
+            "message": "Az adatbázis már tartalmaz termékeket. A feltöltés kihagyva.",
+        }
 
     try:
         # Get Locations
         locs_res = await db.execute(select(Location))
         locs = {loc.name: loc.id for loc in locs_res.scalars().all()}
-        
+
         # Get Categories
         cats_res = await db.execute(select(Category))
         cats = {c.name: c.id for c in cats_res.scalars().all()}
@@ -49,7 +56,7 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 "price_gross": 1524,
                 "sale_gross": 2990,
                 "stock": 45,
-                "min": 10
+                "min": 10,
             },
             {
                 "name": "Samsung 25W PD fali adapter",
@@ -60,8 +67,8 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 "price_net": 3200,
                 "price_gross": 4064,
                 "sale_gross": 7990,
-                "stock": 2, # Low-stock item
-                "min": 5
+                "stock": 2,  # Low-stock item
+                "min": 5,
             },
             {
                 "name": "iPhone 15 Pro Max üvegfólia",
@@ -73,7 +80,7 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 "price_gross": 571,
                 "sale_gross": 1990,
                 "stock": 80,
-                "min": 20
+                "min": 20,
             },
             {
                 "name": "Kingston DataTraveler 64GB USB 3.2",
@@ -85,7 +92,7 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 "price_gross": 2286,
                 "sale_gross": 4490,
                 "stock": 15,
-                "min": 5
+                "min": 5,
             },
             {
                 "name": "BGA forrasztó paszta szervizhez",
@@ -97,8 +104,8 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 "price_gross": 3048,
                 "sale_gross": 5990,
                 "stock": 8,
-                "min": 2
-            }
+                "min": 2,
+            },
         ]
 
         for item in seed_items:
@@ -118,14 +125,16 @@ async def seed_development_data(db: AsyncSession = Depends(get_db), current_user
                 minimum_stock=item["min"],
                 vat_rate=27,
                 unit="db",
-                billingo_sync_state="Nincs összekapcsolva"
+                billingo_sync_state="Nincs összekapcsolva",
             )
             db.add(p)
-            
-        await log_audit(db, None, "Rendszer", "Magyar nyelvű demo tesztadatok sikeresen feltöltve.")
+
+        await log_audit(
+            db, None, "Rendszer", "Magyar nyelvű demo tesztadatok sikeresen feltöltve."
+        )
         await db.commit()
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Sikertelen seeding: {str(e)}")
-        
+
     return {"status": "success", "message": "Demo adatok sikeresen betöltve."}

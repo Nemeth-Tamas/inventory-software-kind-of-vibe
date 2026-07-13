@@ -2,9 +2,11 @@ from celery_app import celery_app
 import time
 import asyncio
 
+
 # Setup helper for async database sessions in Celery tasks
 def run_async(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
+
 
 @celery_app.task(name="tasks.billingo_bulk_sync")
 def billingo_bulk_sync():

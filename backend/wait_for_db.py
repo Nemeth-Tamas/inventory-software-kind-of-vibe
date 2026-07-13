@@ -2,6 +2,7 @@ import time
 import socket
 import sys
 
+
 def wait_for_postgres():
     host = "postgres"
     port = 5432
@@ -17,6 +18,7 @@ def wait_for_postgres():
                 print("Error: Postgres connection timeout (60s exceeded)")
                 sys.exit(1)
             time.sleep(0.5)
+
 
 if __name__ == "__main__":
     wait_for_postgres()

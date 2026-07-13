@@ -4,6 +4,7 @@ from event_bus import event_bus
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
+
 @router.get("")
 async def sse_event_stream():
     # Return StreamingResponse with event-stream media type
@@ -13,6 +14,6 @@ async def sse_event_stream():
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
+            "X-Accel-Buffering": "no",
+        },
     )

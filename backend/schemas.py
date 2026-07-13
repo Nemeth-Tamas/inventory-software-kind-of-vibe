@@ -3,20 +3,24 @@ from typing import Optional
 from datetime import datetime
 from models import UserRole
 
+
 # Auth schemas
 class UserLogin(BaseModel):
     username: str
     password: str
+
 
 class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
 
+
 class UserCreate(BaseModel):
     username: str
     password: str
     role: UserRole
+
 
 class UserResponse(BaseModel):
     id: str
@@ -27,25 +31,30 @@ class UserResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # Category schemas
 class CategoryBase(BaseModel):
     name: str
 
+
 class CategoryResponse(CategoryBase):
     id: str
     is_archived: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 # Location schemas
 class LocationBase(BaseModel):
     name: str
 
+
 class LocationResponse(LocationBase):
     id: str
     is_archived: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 # Supplier schemas
 class SupplierBase(BaseModel):
@@ -60,15 +69,18 @@ class SupplierBase(BaseModel):
     billingo_partner_id: Optional[str] = None
     is_active: bool = True
 
+
 class SupplierResponse(SupplierBase):
     id: str
     is_archived: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class MergeRequest(BaseModel):
     source_id: str
     target_id: str
+
 
 # Product schemas
 class ProductCreate(BaseModel):
@@ -92,6 +104,7 @@ class ProductCreate(BaseModel):
     track_stock: bool = True
     allow_negative_stock: bool = False
     serial_number_tracking: bool = False
+
 
 class ProductResponse(BaseModel):
     id: str
@@ -124,10 +137,12 @@ class ProductResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # Stocktake schemas
 class StocktakeCreate(BaseModel):
     name: str
     notes: Optional[str] = None
+
 
 class StocktakeResponse(BaseModel):
     id: str
@@ -135,8 +150,9 @@ class StocktakeResponse(BaseModel):
     status: str
     created_at: datetime
     notes: Optional[str] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class StocktakeItemResponse(BaseModel):
     id: str
@@ -147,5 +163,5 @@ class StocktakeItemResponse(BaseModel):
     counted_qty: int
     difference: int
     note: Optional[str] = None
-    
+
     model_config = ConfigDict(from_attributes=True)

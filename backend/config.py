@@ -2,6 +2,7 @@ import os
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
 
+
 class Settings(BaseSettings):
     APP_ENV: str = "production"
     DATABASE_URL: str = ""
@@ -49,15 +50,26 @@ class Settings(BaseSettings):
         else:
             # Production strict validation
             if not db_url:
-                raise ValueError("DATABASE_URL environment variable is required in production mode")
+                raise ValueError(
+                    "DATABASE_URL environment variable is required in production mode"
+                )
             if not redis_url:
-                raise ValueError("REDIS_URL environment variable is required in production mode")
-            if not jwt_sec or jwt_sec == "super_secret_jwt_token_for_jwt_auth_1234567890":
-                raise ValueError("A secure JWT_SECRET environment variable is required in production mode")
-            if not admin_usr or admin_usr == "admin":
-                raise ValueError("ADMIN_USER cannot be empty or 'admin' in production mode")
+                raise ValueError(
+                    "REDIS_URL environment variable is required in production mode"
+                )
+            if (
+                not jwt_sec
+                or jwt_sec == "super_secret_jwt_token_for_jwt_auth_1234567890"
+            ):
+                raise ValueError(
+                    "A secure JWT_SECRET environment variable is required in production mode"
+                )
+            if not admin_usr:
+                raise ValueError("ADMIN_USER cannot be empty in production mode")
             if not admin_pwd or admin_pwd == "admin123":
-                raise ValueError("ADMIN_PASSWORD cannot be empty or 'admin123' in production mode")
+                raise ValueError(
+                    "ADMIN_PASSWORD cannot be empty or 'admin123' in production mode"
+                )
 
             # Production strict disables
             mock_billingo = False
@@ -81,5 +93,6 @@ class Settings(BaseSettings):
             output["ACCESS_TOKEN_EXPIRE_MINUTES"] = int(expire)
 
         return output
+
 
 settings = Settings()

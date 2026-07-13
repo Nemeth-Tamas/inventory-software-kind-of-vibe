@@ -8,18 +8,19 @@ from sqlalchemy import delete, select
 from routers.auth import validate_password_strength
 from fastapi import HTTPException
 
+
 @pytest.mark.anyio
 async def test_password_policy():
     # 1. Reject < 8 chars
     with pytest.raises(HTTPException) as exc:
         validate_password_strength("short")
     assert exc.value.status_code == 400
-    
+
     # 2. Reject common passwords
     with pytest.raises(HTTPException) as exc:
         validate_password_strength("password123")
     assert exc.value.status_code == 400
-    
+
     # 3. Accept strong passwords
     validate_password_strength("MySuperUncommonPassword2026!")
 
@@ -28,43 +29,59 @@ async def test_password_policy():
 async def test_auth_hardening_endpoints():
     async with AsyncSessionLocal() as session:
         # Cleanup
-        await session.execute(delete(AuditLog).where(AuditLog.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])))
-        await session.execute(delete(User).where(User.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])))
-        
+        await session.execute(
+            delete(AuditLog).where(
+                AuditLog.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])
+            )
+        )
+        await session.execute(
+            delete(User).where(
+                User.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])
+            )
+        )
+
         # Create users
         admin1 = User(
             username="auth_admin1",
             hashed_password=get_password_hash("secureAdminPass1!"),
             role=UserRole.ADMIN,
             is_active=True,
-            must_change_password=False
+            must_change_password=False,
         )
         admin2 = User(
             username="auth_admin2",
             hashed_password=get_password_hash("secureAdminPass2!"),
             role=UserRole.ADMIN,
             is_active=True,
-            must_change_password=False
+            must_change_password=False,
         )
         standard = User(
             username="auth_standard",
             hashed_password=get_password_hash("secureStandardPass!"),
             role=UserRole.SALES,
             is_active=True,
-            must_change_password=False
+            must_change_password=False,
         )
         session.add_all([admin1, admin2, standard])
         await session.commit()
 
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver/api") as client:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver/api"
+        ) as client:
             # Login to get tokens
-            login_admin1 = await client.post("/auth/login", data={"username": "auth_admin1", "password": "secureAdminPass1!"})
+            login_admin1 = await client.post(
+                "/auth/login",
+                data={"username": "auth_admin1", "password": "secureAdminPass1!"},
+            )
             assert login_admin1.status_code == 200
             token_admin1 = login_admin1.json()["access_token"]
             headers_admin1 = {"Authorization": f"Bearer {token_admin1}"}
 
-            login_admin2 = await client.post("/auth/login", data={"username": "auth_admin2", "password": "secureAdminPass2!"})
+            login_admin2 = await client.post(
+                "/auth/login",
+                data={"username": "auth_admin2", "password": "secureAdminPass2!"},
+            )
             assert login_admin2.status_code == 200
             token_admin2 = login_admin2.json()["access_token"]
             headers_admin2 = {"Authorization": f"Bearer {token_admin2}"}
@@ -76,8 +93,8 @@ async def test_auth_hardening_endpoints():
                 json={
                     "username": "auth_standard_new",
                     "password": "secureStandardNewPass!",
-                    "role": UserRole.VIEWER.value
-                }
+                    "role": UserRole.VIEWER.value,
+                },
             )
             assert reg_resp.status_code == 200
             user_data = reg_resp.json()
@@ -87,16 +104,24 @@ async def test_auth_hardening_endpoints():
 
             # Cleanup registered user
             async with AsyncSessionLocal() as session:
-                await session.execute(delete(User).where(User.username == "auth_standard_new"))
+                await session.execute(
+                    delete(User).where(User.username == "auth_standard_new")
+                )
                 await session.commit()
 
             # 2. Get user IDs
             async with AsyncSessionLocal() as session:
-                res1 = await session.execute(select(User.id).where(User.username == "auth_admin1"))
+                res1 = await session.execute(
+                    select(User.id).where(User.username == "auth_admin1")
+                )
                 admin1_id = res1.scalar()
-                res2 = await session.execute(select(User.id).where(User.username == "auth_admin2"))
+                res2 = await session.execute(
+                    select(User.id).where(User.username == "auth_admin2")
+                )
                 admin2_id = res2.scalar()
-                res3 = await session.execute(select(User.id).where(User.username == "auth_standard"))
+                res3 = await session.execute(
+                    select(User.id).where(User.username == "auth_standard")
+                )
                 standard_id = res3.scalar()
 
             # 3. Protect last admin demotion
@@ -104,30 +129,30 @@ async def test_auth_hardening_endpoints():
             demote_resp = await client.put(
                 f"/auth/users/{admin2_id}/role",
                 headers=headers_admin1,
-                json={"role": UserRole.SALES.value}
+                json={"role": UserRole.SALES.value},
             )
             assert demote_resp.status_code == 200
 
             # Now auth_admin1 is the final active admin. Try to demote auth_admin1 -> should fail with 400
             await client.put(
                 f"/auth/users/{admin1_id}/role",
-                headers=headers_admin2, # authenticate as admin2 (now sales) or admin1? wait, admin2 is demoted.
+                headers=headers_admin2,  # authenticate as admin2 (now sales) or admin1? wait, admin2 is demoted.
                 # Actually, try to demote admin1 using a request, but we must use admin1 credentials since they are still admin
-                json={"role": UserRole.SALES.value}
+                json={"role": UserRole.SALES.value},
             )
             # Demote own role is blocked anyway, so let's promote admin2 back to admin, then demote admin1.
             promote_admin2 = await client.put(
                 f"/auth/users/{admin2_id}/role",
                 headers=headers_admin1,
-                json={"role": UserRole.ADMIN.value}
+                json={"role": UserRole.ADMIN.value},
             )
             assert promote_admin2.status_code == 200
-            
+
             # Now both are admins. Demote admin2 from admin1 -> works.
             demote_admin2 = await client.put(
                 f"/auth/users/{admin2_id}/role",
                 headers=headers_admin1,
-                json={"role": UserRole.SALES.value}
+                json={"role": UserRole.SALES.value},
             )
             assert demote_admin2.status_code == 200
 
@@ -137,59 +162,93 @@ async def test_auth_hardening_endpoints():
             # What if we disable admin2? Let's check.
             # Let's verify toggling active:
             # Can we disable standard user? -> yes
-            toggle_std = await client.put(f"/auth/users/{standard_id}/toggle-active", headers=headers_admin1)
+            toggle_std = await client.put(
+                f"/auth/users/{standard_id}/toggle-active", headers=headers_admin1
+            )
             assert toggle_std.status_code == 200
-            
+
             # Can admin1 disable themselves? -> blocked ("Nem tilthatja le saját magát!")
-            toggle_self = await client.put(f"/auth/users/{admin1_id}/toggle-active", headers=headers_admin1)
+            toggle_self = await client.put(
+                f"/auth/users/{admin1_id}/toggle-active", headers=headers_admin1
+            )
             assert toggle_self.status_code == 400
 
             # Can we promote standard back to active?
-            toggle_std_back = await client.put(f"/auth/users/{standard_id}/toggle-active", headers=headers_admin1)
+            toggle_std_back = await client.put(
+                f"/auth/users/{standard_id}/toggle-active", headers=headers_admin1
+            )
             assert toggle_std_back.status_code == 200
 
             # Promote admin2 back to admin
-            promote_admin2_back = await client.put(f"/auth/users/{admin2_id}/role", headers=headers_admin1, json={"role": UserRole.ADMIN.value})
+            promote_admin2_back = await client.put(
+                f"/auth/users/{admin2_id}/role",
+                headers=headers_admin1,
+                json={"role": UserRole.ADMIN.value},
+            )
             assert promote_admin2_back.status_code == 200
 
             # Disable admin2 (which is allowed because admin1 is still active) -> works
-            disable_admin2 = await client.put(f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1)
+            disable_admin2 = await client.put(
+                f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1
+            )
             assert disable_admin2.status_code == 200
 
             # Now admin1 is the only active admin. Try to disable admin2? admin2 is already inactive.
             # Try to disable admin1: blocked by self-disable check.
             # What if we try to demote admin1? Blocked by self-role-change check.
             # Let's enable admin2 again.
-            enable_admin2 = await client.put(f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1)
+            enable_admin2 = await client.put(
+                f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1
+            )
             assert enable_admin2.status_code == 200
 
             # Now both are active admins. Disable admin2.
-            disable_admin2_again = await client.put(f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1)
+            disable_admin2_again = await client.put(
+                f"/auth/users/{admin2_id}/toggle-active", headers=headers_admin1
+            )
             assert disable_admin2_again.status_code == 200
-            
+
             # Now admin2 is inactive, meaning admin1 is the last active admin.
             # Let's try to demote admin1? Self demote is blocked.
             # Let's try to demote admin2 (who is inactive)? Inactive admins are not "active admins", so demoting them is allowed.
-            
+
             # Let's test admin password reset:
             reset_resp = await client.post(
                 f"/auth/users/{standard_id}/reset-password",
                 headers=headers_admin1,
-                json={"new_password": "secureNewStandardPass1!"}
+                json={"new_password": "secureNewStandardPass1!"},
             )
             assert reset_resp.status_code == 200
-            
+
             # Login with new standard pass
-            login_std_new = await client.post("/auth/login", data={"username": "auth_standard", "password": "secureNewStandardPass1!"})
+            login_std_new = await client.post(
+                "/auth/login",
+                data={
+                    "username": "auth_standard",
+                    "password": "secureNewStandardPass1!",
+                },
+            )
             assert login_std_new.status_code == 200
             std_new_token = login_std_new.json()["access_token"]
-            
+
             # Me request should require password change (412 status)
-            me_resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {std_new_token}"})
+            me_resp = await client.get(
+                "/auth/me", headers={"Authorization": f"Bearer {std_new_token}"}
+            )
             assert me_resp.status_code == 412
 
     finally:
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(AuditLog).where(AuditLog.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])))
-            await session.execute(delete(User).where(User.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])))
+            await session.execute(
+                delete(AuditLog).where(
+                    AuditLog.username.in_(
+                        ["auth_admin1", "auth_admin2", "auth_standard"]
+                    )
+                )
+            )
+            await session.execute(
+                delete(User).where(
+                    User.username.in_(["auth_admin1", "auth_admin2", "auth_standard"])
+                )
+            )
             await session.commit()
