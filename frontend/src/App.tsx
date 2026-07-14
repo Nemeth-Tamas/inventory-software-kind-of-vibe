@@ -68,6 +68,10 @@ export default function App() {
   const [activeStocktake, setActiveStocktake] = useState<any>(null);
   const [stocktakeItems, setStocktakeItems] = useState<any[]>([]);
 
+  // Nyitókészlet (Opening Stock) State
+  const [openingStockCart, setOpeningStockCart] = useState<any[]>([]);
+  const [openingStockLocation, setOpeningStockLocation] = useState('');
+
   // Billingo Status
   const [billingoStatus, setBillingoStatus] = useState<any>(null);
 
@@ -317,7 +321,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       clearTimeout(resetTimer);
     };
-  }, [token, mustChangePassword, activeTab, activeStocktake, receiptCart, issueCart, products]);
+  }, [token, mustChangePassword, activeTab, activeStocktake, receiptCart, issueCart, products, openingStockCart, openingStockLocation]);
 
   // Handle scanned barcode depending on active view context
   const handleScannedCode = async (barcode: string) => {
@@ -348,6 +352,39 @@ export default function App() {
       } else {
         playBeep(400, 0.3);
         alert(`Ismeretlen vonalkód kiadáshoz: ${barcode}`);
+      }
+    } else if (activeTab === 'opening_stock') {
+      const product = products.find(p => p.barcode === barcode || p.ean === barcode);
+      if (product) {
+        if (!openingStockLocation) {
+          playBeep(400, 0.3);
+          alert("Kérjük, először válasszon tárhelyet!");
+          return;
+        }
+        setOpeningStockCart(prev => {
+          const existing = prev.find(item => item.product_id === product.id && item.location_id === openingStockLocation);
+          if (existing) {
+            playBeep(1200, 0.1);
+            return prev.map(item => 
+              (item.product_id === product.id && item.location_id === openingStockLocation)
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            );
+          }
+          playBeep(1200, 0.15);
+          return [...prev, {
+            product_id: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            sku: product.sku,
+            location_id: openingStockLocation,
+            location_name: locations.find(l => l.id === openingStockLocation)?.name || '',
+            quantity: 1
+          }];
+        });
+      } else {
+        playBeep(400, 0.3);
+        alert(`Ismeretlen vonalkód nyitókészlethez: ${barcode}`);
       }
     } else if (activeTab === 'stocktake' && activeStocktake) {
       try {
@@ -505,6 +542,10 @@ export default function App() {
             fetchData={fetchData}
             products={products}
             playBeep={playBeep}
+            cart={openingStockCart}
+            setCart={setOpeningStockCart}
+            manualLocation={openingStockLocation}
+            setManualLocation={setOpeningStockLocation}
           />
         );
       case 'billingo':
@@ -571,6 +612,24 @@ export default function App() {
               const existing = prev.find(item => item.product_id === p.id);
               if (existing) return prev.map(item => item.product_id === p.id ? { ...item, quantity: item.quantity + 1 } : item);
               return [...prev, { product_id: p.id, name: p.name, barcode: p.barcode, quantity: 1, stock: p.current_stock }];
+            });
+          } else if (activeTab === 'opening_stock') {
+            if (!openingStockLocation) {
+              alert("Kérjük, először válasszon tárhelyet!");
+              return;
+            }
+            setOpeningStockCart(prev => {
+              const existing = prev.find(item => item.product_id === p.id && item.location_id === openingStockLocation);
+              if (existing) return prev.map(item => (item.product_id === p.id && item.location_id === openingStockLocation) ? { ...item, quantity: item.quantity + 1 } : item);
+              return [...prev, {
+                product_id: p.id,
+                name: p.name,
+                barcode: p.barcode,
+                sku: p.sku,
+                location_id: openingStockLocation,
+                location_name: locations.find(l => l.id === openingStockLocation)?.name || '',
+                quantity: 1
+              }];
             });
           } else {
             alert(`Kiválasztott termék: ${p.name} (Készleten: ${p.current_stock} db)`);

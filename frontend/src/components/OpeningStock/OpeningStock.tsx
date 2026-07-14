@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, Scan, CheckCircle, Info, Download, Upload, AlertCircle } from 'lucide-react';
+import { Trash2, Scan, CheckCircle, Info, Download, Upload, AlertCircle, Search } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { API_BASE } from '../../config';
 
@@ -9,19 +9,19 @@ interface OpeningStockProps {
   fetchData: () => void;
   products: any[];
   playBeep: (freq?: number, duration?: number, volume?: number) => void;
+  cart: any[];
+  setCart: React.Dispatch<React.SetStateAction<any[]>>;
+  manualLocation: string;
+  setManualLocation: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export default function OpeningStock({
-  token, locations, fetchData, products, playBeep
+  token, locations, fetchData, products, playBeep,
+  cart, setCart, manualLocation, setManualLocation
 }: OpeningStockProps) {
   
   const [activeSubTab, setActiveSubTab] = useState<'manual' | 'excel'>('manual');
   
-  // Location for manual entries
-  const [manualLocation, setManualLocation] = useState('');
-  
-  // Manual list state (cart)
-  const [cart, setCart] = useState<any[]>([]);
   const [scanInput, setScanInput] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'warn' | 'info' } | null>(null);
@@ -110,6 +110,31 @@ export default function OpeningStock({
 
     setSearchResults(filtered);
   }, [scanInput, products, activeSubTab]);
+
+  const handleInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanInput.trim()) return;
+
+    // Check if there is an exact match in current products list
+    const query = scanInput.trim().toLowerCase();
+    const match = products.find(p => 
+      p.barcode.toLowerCase() === query || 
+      (p.ean && p.ean.toLowerCase() === query) ||
+      (p.sku && p.sku.toLowerCase() === query)
+    );
+
+    if (match) {
+      addToCart(match);
+      setScanInput('');
+      setSearchResults([]);
+    } else {
+      // Barcode not found
+      playBeep(400, 0.3);
+      showFeedback(`Ismeretlen vonalkód: ${scanInput}`, "warn");
+      setScanInput('');
+      setSearchResults([]);
+    }
+  };
 
   const addToCart = (product: any) => {
     if (!manualLocation) {
@@ -358,74 +383,81 @@ export default function OpeningStock({
 
       {/* Subtab Contents */}
       {activeSubTab === 'manual' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '24px' }}>
-          {/* Main Cart Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
-                    Cél Tárhely (Kijelölt tárhely a kézi rögzítéshez)
-                  </label>
-                  <select
-                    value={manualLocation}
-                    onChange={e => setManualLocation(e.target.value)}
-                    style={{ width: '100%', padding: '10px', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', borderRadius: '6px' }}
-                  >
-                    {locations.map(l => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Scanner & Search Input Container */}
+          <div 
+            onClick={() => inputRef.current?.focus()}
+            className="glass-panel" 
+            style={{
+              padding: '24px', marginBottom: '4px', display: 'flex', flexDirection: 'column', gap: '12px',
+              border: '1px solid #38bdf8', cursor: 'text', position: 'relative', zIndex: 10
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Scan size={24} style={{ color: '#38bdf8', animation: 'pulse 2s infinite' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f8fafc' }}>
+                  Kattintson ide, majd olvassa be a termék vonalkódját
                 </div>
-              </div>
-
-              {/* Barcode Search / Scan */}
-              <div style={{ position: 'relative' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
-                  Vonalkód beolvasása vagy Keresés név alapján
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    placeholder="Szkenneljen be egy vonalkódot vagy gépelje be a termék nevét..."
-                    value={scanInput}
-                    onChange={e => setScanInput(e.target.value)}
-                    style={{ width: '100%', padding: '12px 12px 12px 40px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '8px' }}
-                  />
-                  <Scan size={18} style={{ position: 'absolute', left: '12px', top: '15px', color: '#64748b' }} />
+                <div style={{ fontSize: '13px', color: '#94a3b8' }}>
+                  Vagy keressen terméknév, vonalkód vagy cikkszám alapján
                 </div>
-
-                {/* Autocomplete Search Dropdown */}
-                {searchResults.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', marginTop: '6px', zIndex: 100, maxHeight: '250px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
-                    {searchResults.map(p => (
-                      <div
-                        key={p.id}
-                        onClick={() => {
-                          addToCart(p);
-                          setScanInput('');
-                          setSearchResults([]);
-                        }}
-                        style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1e293b' }}
-                        className="search-item-hover"
-                      >
-                        <div>
-                          <strong style={{ display: 'block', color: 'white' }}>{p.name}</strong>
-                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>SKU: {p.sku || '-'} | Vonalkód: {p.barcode}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <span className="badge badge-info">{p.current_stock} db készlet</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Cart Table */}
-            <div className="table-container">
+            <form onSubmit={handleInputSubmit} style={{ position: 'relative', marginTop: '8px' }}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={scanInput}
+                onChange={e => setScanInput(e.target.value)}
+                placeholder="Olvassa be vagy gépeljen ide..."
+                style={{
+                  width: '100%', padding: '12px 16px 12px 40px', backgroundColor: '#090d16',
+                  border: '1px solid #1e293b', color: '#f8fafc', borderRadius: '8px', fontSize: '15px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <Search size={18} style={{ position: 'absolute', left: '14px', top: '15px', color: '#64748b' }} />
+              
+              {/* Autocomplete Search Dropdown */}
+              {searchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a',
+                  border: '1px solid #1e293b', borderRadius: '0 0 8px 8px', zIndex: 100, maxHeight: '250px',
+                  overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                }}>
+                  {searchResults.map(p => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        addToCart(p);
+                        setScanInput('');
+                        setSearchResults([]);
+                      }}
+                      style={{
+                        padding: '12px 16px', borderBottom: '1px solid #1e293b', cursor: 'pointer',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        transition: 'background-color 0.2s'
+                      }}
+                      className="search-item-hover"
+                    >
+                      <div>
+                        <strong style={{ color: '#f8fafc', display: 'block' }}>{p.name}</strong>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>Vonalkód: {p.barcode} | SKU: {p.sku || '-'}</span>
+                      </div>
+                      <span className="badge badge-info">{p.current_stock} db készlet</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* Grid Layout for Cart & Sidebar */}
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '24px' }}>
+            {/* Left Column: Cart Table */}
+            <div className="table-container" style={{ alignSelf: 'start' }}>
               <table className="dense-table">
                 <thead>
                   <tr>
@@ -459,7 +491,7 @@ export default function OpeningStock({
                             min="0"
                             value={item.quantity}
                             onChange={e => handleQtyChange(item.product_id, item.location_id, e.target.value)}
-                            style={{ width: '100%', padding: '6px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '4px', textAlign: 'right' }}
+                            style={{ width: '100%', padding: '6px', backgroundColor: '#0f172a', border: '1px solid #334155', color: 'white', borderRadius: '4px', textAlign: 'right', boxSizing: 'border-box' }}
                           />
                         </td>
                         <td style={{ textAlign: 'center' }}>
@@ -476,65 +508,81 @@ export default function OpeningStock({
                 </tbody>
               </table>
             </div>
-          </div>
 
-          {/* Right Action panel */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="glass-panel" style={{ padding: '20px' }}>
-              <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', fontWeight: 'bold' }}>Összegzés</h3>
+            {/* Right Column: Details & Actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', fontWeight: 'bold' }}>Részletek</h3>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', color: '#cbd5e1', marginBottom: '6px' }}>Cél Tárhely *</label>
+                  <select
+                    value={manualLocation}
+                    onChange={e => setManualLocation(e.target.value)}
+                    style={{ width: '100%', padding: '10px', backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f8fafc', borderRadius: '6px', boxSizing: 'border-box' }}
+                  >
+                    {locations.map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <h3 style={{ marginTop: 0, marginBottom: '12px', fontSize: '16px', fontWeight: 'bold' }}>Összegzés</h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#cbd5e1', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Elemek száma:</span>
+                    <strong>{cart.length} db</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Össz. mennyiség:</span>
+                    <strong>{cart.reduce((acc, curr) => acc + curr.quantity, 0)} db</strong>
+                  </div>
+                </div>
+
+                {/* Manager confirmation check */}
+                <div style={{ padding: '12px', backgroundColor: '#1e293b', borderRadius: '6px', marginBottom: '20px', border: '1px solid #334155' }}>
+                  <label style={{ display: 'flex', gap: '8px', cursor: 'pointer', fontSize: '12px', color: '#cbd5e1' }}>
+                    <input
+                      type="checkbox"
+                      checked={managerConfirm}
+                      onChange={e => setManagerConfirm(e.target.checked)}
+                      style={{ marginTop: '2px' }}
+                    />
+                    <span>Vezetői megerősítés (Már készletezett termékek felülírásához)</span>
+                  </label>
+                </div>
+
+                <button
+                  onClick={handleSaveManual}
+                  disabled={cart.length === 0 || importing}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: cart.length === 0 || importing ? '#1e293b' : '#0284c7',
+                    color: cart.length === 0 || importing ? '#64748b' : 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: cart.length === 0 || importing ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {importing ? "Mentés..." : "Nyitókészlet Mentése"}
+                </button>
+              </div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: '#cbd5e1', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Elemek száma:</span>
-                  <strong>{cart.length} db</strong>
+              {feedbackMsg && (
+                <div className={`glass-panel`} style={{ padding: '12px', display: 'flex', gap: '8px', alignItems: 'center', borderLeft: feedbackMsg.type === 'success' ? '4px solid #22c55e' : '4px solid #f59e0b' }}>
+                  <Info size={16} style={{ color: feedbackMsg.type === 'success' ? '#22c55e' : '#f59e0b' }} />
+                  <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{feedbackMsg.text}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Össz. mennyiség:</span>
-                  <strong>{cart.reduce((acc, curr) => acc + curr.quantity, 0)} db</strong>
-                </div>
-              </div>
-
-              {/* Manager confirmation check */}
-              <div style={{ padding: '12px', backgroundColor: '#1e293b', borderRadius: '6px', marginBottom: '20px', border: '1px solid #334155' }}>
-                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer', fontSize: '12px', color: '#cbd5e1' }}>
-                  <input
-                    type="checkbox"
-                    checked={managerConfirm}
-                    onChange={e => setManagerConfirm(e.target.checked)}
-                    style={{ marginTop: '2px' }}
-                  />
-                  <span>Vezetői megerősítés (Már készletezett termékek felülírásához)</span>
-                </label>
-              </div>
-
-              <button
-                onClick={handleSaveManual}
-                disabled={cart.length === 0 || importing}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  backgroundColor: cart.length === 0 || importing ? '#1e293b' : '#0284c7',
-                  color: cart.length === 0 || importing ? '#64748b' : 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: cart.length === 0 || importing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {importing ? "Mentés..." : "Nyitókészlet Mentése"}
-              </button>
+              )}
             </div>
-            
-            {feedbackMsg && (
-              <div className={`glass-panel`} style={{ padding: '12px', display: 'flex', gap: '8px', alignItems: 'center', borderLeft: feedbackMsg.type === 'success' ? '4px solid #22c55e' : '4px solid #f59e0b' }}>
-                <Info size={16} style={{ color: feedbackMsg.type === 'success' ? '#22c55e' : '#f59e0b' }} />
-                <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{feedbackMsg.text}</span>
-              </div>
-            )}
           </div>
         </div>
       ) : (
