@@ -77,7 +77,7 @@ export default function Issue({
     const query = scanInput.toLowerCase().trim();
 
     // 1. If exactly 6 digits, auto-submit immediately (direct match or unknown barcode)
-    if (query.length === 6 && /^\d+$/.test(query)) {
+    if (query.length === 6 && /^[0-9a-fA-F]+$/.test(query)) {
       const match = products.find(p => p.barcode.toLowerCase() === query);
       if (match) {
         addToCart(match);

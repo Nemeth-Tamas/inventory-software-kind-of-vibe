@@ -260,7 +260,7 @@ export default function Stocktake({
 
     const query = scanInput.trim();
     // Auto-submit immediately if input is exactly 6 digits
-    if (query.length === 6 && /^\d+$/.test(query)) {
+    if (query.length === 6 && /^[0-9a-fA-F]+$/.test(query)) {
       setScanInput('');
       submitBarcode(query);
     }

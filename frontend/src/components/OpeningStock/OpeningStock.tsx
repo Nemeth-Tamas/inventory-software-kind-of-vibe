@@ -66,7 +66,7 @@ export default function OpeningStock({
     const query = scanInput.toLowerCase().trim();
 
     // Direct match for exact 6 digit scanner code
-    if (query.length === 6 && /^\d+$/.test(query)) {
+    if (query.length === 6 && /^[0-9a-fA-F]+$/.test(query)) {
       const match = products.find(p => p.barcode.toLowerCase() === query);
       if (match) {
         addToCart(match);
