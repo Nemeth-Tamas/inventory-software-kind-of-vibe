@@ -52,6 +52,13 @@ async def add_correlation_id(request: Request, call_next):
 
     request_logger.info(f"Kérés indult: {request.method} {request.url.path}")
 
+    # SSE endpoint must bypass response-header mutation: assigning a header on a
+    # StreamingResponse inside middleware buffers the entire body before writing,
+    # which immediately terminates the infinite event stream.
+    if request.url.path == "/api/events":
+        response = await call_next(request)
+        return response
+
     try:
         response: Response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
