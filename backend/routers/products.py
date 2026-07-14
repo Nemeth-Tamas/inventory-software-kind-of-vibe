@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
+from sqlalchemy.orm import selectinload
+from typing import Optional, List
+from datetime import datetime
+from pydantic import BaseModel
+from models_inventory import InventoryMovement
 from database import get_db
 from models import Product, User, UserRole
 from schemas import ProductCreate, ProductResponse
@@ -557,3 +562,68 @@ async def restore_product(
         raise HTTPException(
             status_code=500, detail=f"Hiba a visszaállítás során: {str(e)}"
         )
+
+
+class MovementTimelineItem(BaseModel):
+    id: str
+    timestamp: datetime
+    movement_type: str
+    quantity_delta: int
+    stock_before: int
+    stock_after: int
+    source_location: Optional[str] = None
+    destination_location: Optional[str] = None
+    supplier_name: Optional[str] = None
+    price_net: Optional[int] = None
+    user_name: Optional[str] = None
+    reason: Optional[str] = None
+    reference_number: Optional[str] = None
+    note: Optional[str] = None
+
+
+@router.get("/{product_id}/movements", response_model=List[MovementTimelineItem])
+async def get_product_movements(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER, UserRole.WAREHOUSE, UserRole.SALES, UserRole.VIEWER]))
+):
+    p_res = await db.execute(select(Product).where(Product.id == product_id))
+    if not p_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="A termék nem található")
+
+    stmt = (
+        select(InventoryMovement)
+        .where(InventoryMovement.product_id == product_id)
+        .order_by(InventoryMovement.timestamp.desc())
+        .options(
+            selectinload(InventoryMovement.user),
+            selectinload(InventoryMovement.source_location),
+            selectinload(InventoryMovement.destination_location),
+            selectinload(InventoryMovement.supplier)
+        )
+    )
+    res = await db.execute(stmt)
+    movements = res.scalars().all()
+
+    items = []
+    for m in movements:
+        mv_type_val = m.movement_type.value if hasattr(m.movement_type, "value") else str(m.movement_type)
+        items.append(
+            MovementTimelineItem(
+                id=m.id,
+                timestamp=m.timestamp,
+                movement_type=mv_type_val,
+                quantity_delta=m.quantity_delta,
+                stock_before=m.stock_before,
+                stock_after=m.stock_after,
+                source_location=m.source_location.name if m.source_location else None,
+                destination_location=m.destination_location.name if m.destination_location else None,
+                supplier_name=m.supplier.name if m.supplier else None,
+                price_net=m.price_net,
+                user_name=m.user.username if m.user else "Rendszer",
+                reason=m.reason,
+                reference_number=m.reference_number,
+                note=m.note
+            )
+        )
+    return items

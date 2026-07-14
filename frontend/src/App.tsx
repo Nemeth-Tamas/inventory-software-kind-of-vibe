@@ -13,6 +13,7 @@ import Billingo from './components/Billingo/Billingo';
 import AuditLogs from './components/Audit/AuditLogs';
 import Settings from './components/Settings/Settings';
 import OpeningStock from './components/OpeningStock/OpeningStock';
+import Valuation from './components/Valuation/Valuation';
 
 import { API_BASE } from './config';
 
@@ -21,6 +22,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+
+  // Logout handler (declared early to be accessible in useEffects)
+  const handleLogout = () => {
+    setToken(null);
+    setCurrentUser(null);
+    setMustChangePassword(false);
+    localStorage.removeItem('token');
+  };
   
   // Master lists
   const [products, setProducts] = useState<any[]>([]);
@@ -109,6 +118,12 @@ export default function App() {
         return;
       }
       
+      if (resProd.status === 401 || resCat.status === 401) {
+        handleLogout();
+        setAuthError("A munkamenet lejárt. Kérjük, jelentkezzen be újra!");
+        return;
+      }
+      
       if (resProd.ok) setProducts(await resProd.json());
       if (resCat.ok) setCategories(await resCat.json());
       if (resLoc.ok) setLocations(await resLoc.json());
@@ -142,12 +157,76 @@ export default function App() {
       })
       .catch((err) => {
         if (err.message !== "Must change password") {
-          setToken(null);
-          localStorage.removeItem('token');
+          handleLogout();
+          setAuthError("A munkamenet lejárt. Kérjük, jelentkezzen be újra!");
         }
       });
     }
   }, [token]);
+
+  // Inactivity tracking (120 minutes limit)
+  useEffect(() => {
+    if (!token) return;
+
+    let lastActivity = Date.now();
+    const updateActivity = () => {
+      lastActivity = Date.now();
+    };
+
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('scroll', updateActivity);
+
+    const interval = setInterval(() => {
+      const inactiveMs = Date.now() - lastActivity;
+      if (inactiveMs >= 120 * 60 * 1000) {
+        handleLogout();
+        setAuthError("Kijelentkezés történt inaktivitás miatt (120 perc).");
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => {
+      window.removeEventListener('mousemove', updateActivity);
+      window.removeEventListener('keydown', updateActivity);
+      window.removeEventListener('click', updateActivity);
+      window.removeEventListener('scroll', updateActivity);
+      clearInterval(interval);
+    };
+  }, [token]);
+
+  // Load and save draft carts to prevent data loss on auto-logout
+  useEffect(() => {
+    if (currentUser) {
+      const savedReceipt = localStorage.getItem(`receiptCart_${currentUser.username}`);
+      if (savedReceipt) {
+        try { setReceiptCart(JSON.parse(savedReceipt)); } catch (e) {}
+      } else {
+        setReceiptCart([]);
+      }
+      const savedIssue = localStorage.getItem(`issueCart_${currentUser.username}`);
+      if (savedIssue) {
+        try { setIssueCart(JSON.parse(savedIssue)); } catch (e) {}
+      } else {
+        setIssueCart([]);
+      }
+    } else {
+      setReceiptCart([]);
+      setIssueCart([]);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem(`receiptCart_${currentUser.username}`, JSON.stringify(receiptCart));
+    }
+  }, [receiptCart, currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem(`issueCart_${currentUser.username}`, JSON.stringify(issueCart));
+    }
+  }, [issueCart, currentUser]);
 
   // Server-Sent Events (SSE) Live Connection
   useEffect(() => {
@@ -332,19 +411,16 @@ export default function App() {
         setToken(data.access_token);
         localStorage.setItem('token', data.access_token);
       } else {
-        setAuthError('Hibás felhasználónév vagy jelszó!');
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          setAuthError(`Túl sok sikertelen kísérlet. Kérjük várjon ${retryAfter ? retryAfter + ' másodpercet' : 'pár percet'}!`);
+        } else {
+          setAuthError('Hibás felhasználónév vagy jelszó!');
+        }
       }
     } catch (err) {
       setAuthError('Csatlakozási hiba a szerverrel.');
     }
-  };
-
-  // Logout handler
-  const handleLogout = () => {
-    setToken(null);
-    setCurrentUser(null);
-    setMustChangePassword(false);
-    localStorage.removeItem('token');
   };
 
   // Test Billingo credentials
@@ -368,6 +444,8 @@ export default function App() {
         return <Dashboard products={products} movements={movements} sseEvents={sseEvents} />;
       case 'products':
         return <Products token={token} categories={categories} locations={locations} suppliers={suppliers} fetchData={fetchData} />;
+      case 'keszletertek':
+        return <Valuation token={token} categories={categories} locations={locations} />;
       case 'receipt':
         return (
           <Receipt 

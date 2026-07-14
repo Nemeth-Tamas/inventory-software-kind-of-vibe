@@ -40,8 +40,6 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
-    ports:
-      - "${BACKEND_PORT:-18000}:18000"
     volumes:
       - ./backups:/app/backups
     depends_on:

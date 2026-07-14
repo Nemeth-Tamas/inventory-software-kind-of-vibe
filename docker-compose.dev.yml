@@ -12,3 +12,5 @@ services:
       - APP_ENV=development
       - ALLOW_MOCK_BILLINGO=${ALLOW_MOCK_BILLINGO:-true}
       - ALLOW_SEEDING=${ALLOW_SEEDING:-true}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-18000}:18000"

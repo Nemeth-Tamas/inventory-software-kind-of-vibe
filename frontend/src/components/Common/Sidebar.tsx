@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, ShoppingCart, ArrowLeftRight, ClipboardCheck, History, RefreshCw, Settings } from 'lucide-react';
+import { Package, LayoutDashboard, ShoppingCart, ArrowLeftRight, ClipboardCheck, History, RefreshCw, Settings, Coins } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -12,6 +12,7 @@ export default function Sidebar({ activeTab, setActiveTab, setActiveStocktake, c
   const menuItems = [
     { id: 'dashboard', label: 'Áttekintés', icon: LayoutDashboard },
     { id: 'products', label: 'Termékek', icon: Package },
+    { id: 'keszletertek', label: 'Készletérték', icon: Coins },
     { id: 'receipt', label: 'Bevételezés', icon: ShoppingCart },
     { id: 'opening_stock', label: 'Nyitókészlet', icon: Package },
     { id: 'issue', label: 'Kiadás', icon: ArrowLeftRight },

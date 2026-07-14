@@ -100,6 +100,35 @@ export default function Products({ token, categories, locations, suppliers, fetc
   const [sortOrder, setSortOrder] = useState('asc');
   
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [productMovements, setProductMovements] = useState<any[]>([]);
+  const [loadingMovements, setLoadingMovements] = useState(false);
+
+  useEffect(() => {
+    if (selectedProduct) {
+      const fetchMovements = async () => {
+        setLoadingMovements(true);
+        try {
+          const response = await fetch(`${API_BASE}/products/${selectedProduct.id}/movements`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            setProductMovements(await response.json());
+          } else {
+            setProductMovements([]);
+          }
+        } catch (err) {
+          console.error("Hiba a termékmozgások lekérésekor", err);
+          setProductMovements([]);
+        } finally {
+          setLoadingMovements(false);
+        }
+      };
+      fetchMovements();
+    } else {
+      setProductMovements([]);
+    }
+  }, [selectedProduct, token]);
+
   const [localSearch, setLocalSearch] = useState('');
 
   const fetchPaginatedProducts = async () => {
@@ -1228,7 +1257,7 @@ export default function Products({ token, categories, locations, suppliers, fetc
           onClick={e => { if (e.target === e.currentTarget) setSelectedProduct(null); }}
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 140 }}
         >
-          <div className="glass-panel" style={{ padding: '24px', width: '600px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="glass-panel" style={{ padding: '24px', width: '750px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
               <h3 style={{ margin: 0, color: '#38bdf8' }}>Termék Részletes Adatai</h3>
               <X size={20} onClick={() => setSelectedProduct(null)} style={{ cursor: 'pointer', color: '#64748b' }} />
@@ -1309,6 +1338,48 @@ export default function Products({ token, categories, locations, suppliers, fetc
                 <p style={{ margin: 0, color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>{selectedProduct.description}</p>
               </div>
             )}
+
+            <div style={{ borderTop: '1px solid #1e293b', paddingTop: '16px', marginTop: '8px' }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '15px' }}>Termék Életút / Készletmozgások</h4>
+              {loadingMovements ? (
+                <div style={{ color: '#64748b', fontSize: '13px' }}>Betöltés...</div>
+              ) : productMovements.length === 0 ? (
+                <div style={{ color: '#64748b', fontSize: '13px' }}>Nincsenek korábbi mozgások rögzítve.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '250px', overflowY: 'auto', paddingRight: '8px' }}>
+                  {productMovements.map((mv) => {
+                    const isPositive = mv.quantity_delta > 0;
+                    const deltaStr = isPositive ? `+${mv.quantity_delta}` : `${mv.quantity_delta}`;
+                    const deltaColor = isPositive ? '#22c55e' : (mv.quantity_delta < 0 ? '#ef4444' : '#64748b');
+                    
+                    return (
+                      <div key={mv.id} style={{ display: 'flex', gap: '12px', fontSize: '12px', borderBottom: '1px solid #0f172a', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: '120px', color: '#64748b' }}>
+                          {new Date(mv.timestamp).toLocaleString('hu-HU')}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 'bold', color: '#cbd5e1' }}>{mv.movement_type}</div>
+                          <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>
+                            {mv.source_location && `Forrás: ${mv.source_location} `}
+                            {mv.destination_location && `Cél: ${mv.destination_location} `}
+                            {mv.supplier_name && `Beszállító: ${mv.supplier_name} `}
+                            {mv.user_name && `(${mv.user_name})`}
+                          </div>
+                          {mv.note && <div style={{ color: '#64748b', fontSize: '11px', fontStyle: 'italic' }}>Megjegyzés: {mv.note}</div>}
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: '110px' }}>
+                          <span style={{ fontWeight: 'bold', color: deltaColor }}>{deltaStr} db</span>
+                          <div style={{ color: '#64748b', fontSize: '10px' }}>Készlet: {mv.stock_before} → {mv.stock_after}</div>
+                          {mv.price_net !== null && mv.price_net > 0 && (
+                            <div style={{ color: '#94a3b8', fontSize: '10px' }}>Nettó egységár: {formatHUF(mv.price_net)}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
               <button 

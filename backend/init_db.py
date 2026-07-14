@@ -72,9 +72,6 @@ async def init_database():
             "Fogyóeszköz",
             "Irodaszer",
             "Egyéb",
-            "Telefonok",
-            "Kiegészítők",
-            "Alkatrészek",
             "Szolgáltatások",
         ]
         existing_cats_res = await session.execute(select(Category.name))
@@ -87,26 +84,6 @@ async def init_database():
         if new_cats:
             session.add_all(new_cats)
             print(f"Created {len(new_cats)} default categories.")
-
-        # Create default suppliers if empty
-        sups_result = await session.execute(select(Supplier))
-        if not sups_result.scalars().first():
-            suppliers = [
-                Supplier(
-                    name="HRP Hungary Kft",
-                    email="info@hrp.hu",
-                    phone="+3614524600",
-                    address="Budapest",
-                ),
-                Supplier(
-                    name="Expert Zrt",
-                    email="info@expert.hu",
-                    phone="+3614524700",
-                    address="Debrecen",
-                ),
-            ]
-            session.add_all(suppliers)
-            print("Default suppliers created.")
 
         await session.commit()
 

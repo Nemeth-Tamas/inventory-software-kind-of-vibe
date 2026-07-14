@@ -149,11 +149,44 @@ async def delete_category(
     return {"status": "success", "message": "Kategória sikeresen törölve."}
 
 
+@router.get("/categories/merge-preview")
+async def merge_categories_preview(
+    source_id: str,
+    target_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+):
+    if source_id == target_id:
+        raise HTTPException(
+            status_code=400, detail="A forrás és cél kategória nem lehet ugyanaz!"
+        )
+    source = (
+        await db.execute(select(Category).where(Category.id == source_id))
+    ).scalar_one_or_none()
+    target = (
+        await db.execute(select(Category).where(Category.id == target_id))
+    ).scalar_one_or_none()
+    if not source or not target:
+        raise HTTPException(
+            status_code=404, detail="Forrás vagy cél kategória nem található"
+        )
+    
+    count_stmt = select(func.count(Product.id)).where(Product.category_id == source_id)
+    count_res = await db.execute(count_stmt)
+    count = count_res.scalar_one()
+    
+    return {
+        "source_name": source.name,
+        "target_name": target.name,
+        "product_count": count
+    }
+
+
 @router.post("/categories/merge")
 async def merge_categories(
     req: MergeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER])),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
 ):
     if req.source_id == req.target_id:
         raise HTTPException(
@@ -169,17 +202,28 @@ async def merge_categories(
         raise HTTPException(
             status_code=404, detail="Forrás vagy cél kategória nem található"
         )
+    
+    # Get count of affected products
+    count_stmt = select(func.count(Product.id)).where(Product.category_id == req.source_id)
+    count_res = await db.execute(count_stmt)
+    count = count_res.scalar_one()
+
+    # Move products transactionally
     await db.execute(
         update(Product)
         .where(Product.category_id == req.source_id)
         .values(category_id=req.target_id)
     )
+    
+    # Delete the source category
     await db.delete(source)
+    
+    # Audit log the operation
     await log_audit(
         db,
         current_user.id,
         current_user.username,
-        f"Kategória összevonva: {source.name} -> {target.name}",
+        f"Kategóriák összevonása: '{source.name}' -> '{target.name}' (érintett termékek: {count})",
     )
     await db.commit()
     return {

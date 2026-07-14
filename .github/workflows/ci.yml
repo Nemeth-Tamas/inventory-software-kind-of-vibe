@@ -1,10 +1,14 @@
-name: hardener CI
+name: CI
 
 on:
   push:
     branches: [ "**" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-and-format:
@@ -17,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install Ruff
         run: |
@@ -72,8 +76,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           cache: 'pip'
+          cache-dependency-path: 'backend/requirements.txt'
 
       - name: Install dependencies
         run: |
@@ -108,12 +113,22 @@ jobs:
       - name: Install dependencies
         run: |
           cd frontend
-          npm ci || npm install
+          npm ci
+
+      - name: Type check frontend
+        run: |
+          cd frontend
+          npx tsc --noEmit
 
       - name: Build frontend
         run: |
           cd frontend
           npm run build
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm run test
 
   docker-compose-check:
     name: Docker Compose Config Check
@@ -122,6 +137,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Validate Docker Compose Configuration
+      - name: Validate Production Docker Compose Configuration
         run: |
-          POSTGRES_PASSWORD=mock JWT_SECRET=mock ADMIN_USER=mock ADMIN_PASSWORD=mock docker compose config
+          POSTGRES_PASSWORD=mock JWT_SECRET=mock ADMIN_USER=mock ADMIN_PASSWORD=mock docker compose -f docker-compose.yml config
+
+      - name: Validate Development Docker Compose Configuration
+        run: |
+          POSTGRES_PASSWORD=mock JWT_SECRET=mock ADMIN_USER=mock ADMIN_PASSWORD=mock docker compose -f docker-compose.yml -f docker-compose.dev.yml config
+
+  docker-build:
+    name: Docker Images Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Images via Compose
+        run: |
+          POSTGRES_PASSWORD=mock JWT_SECRET=mock ADMIN_USER=mock ADMIN_PASSWORD=mock docker compose build

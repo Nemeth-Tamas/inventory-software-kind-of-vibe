@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Key, Folder, Truck, MapPin, UserCheck, HardDrive, RefreshCw, Sliders, Database, Volume2, Shield, X } from 'lucide-react';
+import { ShieldCheck, Key, Folder, Truck, MapPin, UserCheck, HardDrive, RefreshCw, Sliders, Database, Volume2, Shield, X, Download, AlertCircle } from 'lucide-react';
 import { API_BASE } from '../../config';
 
 const formatHUF = (value: number) => {
@@ -690,6 +690,7 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
           { id: 'billingo', label: 'Billingo API', icon: <Key size={16} /> },
           { id: 'import_export', label: 'Import és export', icon: <RefreshCw size={16} /> },
           { id: 'backup', label: 'Biztonsági mentés', icon: <HardDrive size={16} /> },
+          { id: 'consistency', label: 'Készlet konzisztencia', icon: <ShieldCheck size={16} /> },
           { id: 'system', label: 'Rendszerállapot', icon: <Shield size={16} /> }
         ].map(tab => (
           <button
@@ -1612,7 +1613,144 @@ export default function Settings({ token, fetchData, playBeep }: SettingsProps) 
           </div>
         )}
 
+        {/* 13. CONSISTENCY TAB */}
+        {activeSubTab === 'consistency' && (
+          <ConsistencyView token={token} />
+        )}
+
       </div>
+    </div>
+  );
+}
+
+function ConsistencyView({ token }: { token: string | null }) {
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchConsistency = async () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/inventory/consistency`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setReport(await response.json());
+      } else {
+        setError('Nem sikerült lekérni a jelentést.');
+      }
+    } catch (err) {
+      setError('Szerver elérése meghiúsult.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchConsistency();
+  }, [token]);
+
+  const handleExportExcel = () => {
+    window.location.href = `${API_BASE}/excel/export/consistency`;
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h2 style={{ margin: 0, fontSize: '20px' }}>Készlet Konzisztencia Ellenőrzés</h2>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={fetchConsistency}
+            disabled={loading}
+            style={{ padding: '8px 16px', backgroundColor: '#1e293b', border: '1px solid #334155', color: '#cbd5e1', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <RefreshCw size={16} className={loading ? 'spin-anim' : ''} /> Újrafuttatás
+          </button>
+          <button
+            onClick={handleExportExcel}
+            style={{ padding: '8px 16px', backgroundColor: '#991b1b', border: 'none', color: '#ffffff', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Download size={16} /> Excel Letöltés
+          </button>
+        </div>
+      </div>
+
+      <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 20px 0' }}>
+        Ez az eszköz összehasonlítja a terméktáblában rögzített aktuális készletet a történeti mozgások (bevételezések, kiadások) összegével, keresi a negatív készleteket és az archivált termékek aktív készleteit.
+      </p>
+
+      {error && (
+        <div className="glass-panel" style={{ padding: '16px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#f87171', marginBottom: '16px' }}>
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>Ellenőrzés folyamatban...</div>
+      ) : report ? (
+        <div>
+          {!report.has_issues ? (
+            <div className="glass-panel" style={{ padding: '24px', backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid #22c55e', borderRadius: '8px', textAlign: 'center', color: '#4ade80' }}>
+              <ShieldCheck size={48} style={{ margin: '0 auto 12px auto' }} />
+              <h3 style={{ margin: '0 0 4px 0' }}>Minden rendben!</h3>
+              <p style={{ margin: 0, fontSize: '14px', color: '#86efac' }}>Nem találtunk készlet-konzisztencia vagy negatív készlet hibát a rendszerben.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#f87171', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <AlertCircle size={20} />
+                <span>Konzisztencia hibákat találtunk. Kérjük, vizsgáld meg az alábbi listát vagy töltsd le a teljes Excel jelentést.</span>
+              </div>
+
+              <div className="table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <table className="dense-table" style={{ width: '100%', textAlign: 'left' }}>
+                  <thead>
+                    <tr>
+                      <th>Terméknév</th>
+                      <th>SKU</th>
+                      <th>Vonalkód</th>
+                      <th>Hiba típusa</th>
+                      <th>Részletek</th>
+                      <th style={{ textAlign: 'right' }}>Készlet</th>
+                      <th style={{ textAlign: 'right' }}>Várható</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.discrepancies.map((d: any, idx: number) => {
+                      let typeLabel = "Ismeretlen";
+                      let typeColor = "#cbd5e1";
+                      if (d.type === "stock_mismatch") {
+                        typeLabel = "Készlet eltérés";
+                        typeColor = "#fbbf24";
+                      } else if (d.type === "negative_stock") {
+                        typeLabel = "Tiltott negatív";
+                        typeColor = "#f87171";
+                      } else if (d.type === "archived_with_stock") {
+                        typeLabel = "Archivált készlettel";
+                        typeColor = "#60a5fa";
+                      }
+
+                      return (
+                        <tr key={idx}>
+                          <td>{d.product_name}</td>
+                          <td style={{ color: '#94a3b8' }}>{d.sku || '-'}</td>
+                          <td style={{ fontFamily: 'monospace' }}>{d.barcode}</td>
+                          <td style={{ color: typeColor, fontWeight: 'bold' }}>{typeLabel}</td>
+                          <td style={{ color: '#cbd5e1', fontSize: '12px' }}>{d.details}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{d.current_stock} db</td>
+                          <td style={{ textAlign: 'right' }}>{d.expected_stock} db</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

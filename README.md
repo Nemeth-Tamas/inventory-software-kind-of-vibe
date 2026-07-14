@@ -1,5 +1,7 @@
 # Raktárkezelő és Leltár Rendszer (Inventory & Stocktake System)
 
+[![CI](https://github.com/Nemeth-Tamas/inventory-software-kind-of-vibe/actions/workflows/ci.yml/badge.svg)](https://github.com/Nemeth-Tamas/inventory-software-kind-of-vibe/actions/workflows/ci.yml)
+
 Aktívan fejlesztett, saját használatra készült raktárkezelő rendszer.
 
 Ez a projekt egy produkcióra kész, Docker-alapú, magyar nyelvű raktárkezelő, vonalkód-olvasó barát és leltározó webalkalmazás, amelyet kis elektronikai és számítástechnikai szervizek számára terveztünk.

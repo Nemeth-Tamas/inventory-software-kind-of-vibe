@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     JWT_SECRET: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     BILLINGO_API_KEY: str = ""
     ALLOW_MOCK_BILLINGO: bool = False
     ALLOW_SEEDING: bool = False

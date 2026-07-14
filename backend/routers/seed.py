@@ -40,7 +40,16 @@ async def seed_development_data(
         cats_res = await db.execute(select(Category))
         cats = {c.name: c.id for c in cats_res.scalars().all()}
 
-        # Get Suppliers
+        # Get Suppliers, creating demo ones if missing
+        for name, email, phone, address in [
+            ("HRP Hungary Kft", "info@hrp.hu", "+3614524600", "Budapest"),
+            ("Expert Zrt", "info@expert.hu", "+3614524700", "Debrecen")
+        ]:
+            check_sup = await db.execute(select(Supplier).where(Supplier.name == name))
+            if not check_sup.scalars().first():
+                db.add(Supplier(name=name, email=email, phone=phone, address=address))
+        await db.flush()
+
         sups_res = await db.execute(select(Supplier))
         sups = {s.name: s.id for s in sups_res.scalars().all()}
 
@@ -49,7 +58,7 @@ async def seed_development_data(
             {
                 "name": "Baseus USB-C gyorstöltő kábel 2m",
                 "sku": "ACC-BAS-USBC-2M",
-                "cat": "Kiegészítők",
+                "cat": "Tartozék",
                 "loc": "Üzlettér",
                 "sup": "HRP Hungary Kft",
                 "price_net": 1200,
@@ -61,7 +70,7 @@ async def seed_development_data(
             {
                 "name": "Samsung 25W PD fali adapter",
                 "sku": "CHG-SAM-25W-PD",
-                "cat": "Kiegészítők",
+                "cat": "Tartozék",
                 "loc": "Raktár",
                 "sup": "Expert Zrt",
                 "price_net": 3200,
@@ -73,7 +82,7 @@ async def seed_development_data(
             {
                 "name": "iPhone 15 Pro Max üvegfólia",
                 "sku": "SCR-IPH15PM-GLS",
-                "cat": "Kiegészítők",
+                "cat": "Tartozék",
                 "loc": "Üzlettér",
                 "sup": "HRP Hungary Kft",
                 "price_net": 450,
@@ -85,7 +94,7 @@ async def seed_development_data(
             {
                 "name": "Kingston DataTraveler 64GB USB 3.2",
                 "sku": "MEM-KIN-64GB",
-                "cat": "Alkatrészek",
+                "cat": "Alkatrész",
                 "loc": "Raktár",
                 "sup": "Expert Zrt",
                 "price_net": 1800,

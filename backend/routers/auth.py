@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -21,32 +21,68 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-async def get_login_failures(username: str) -> int:
+async def check_login_rate_limit(username: str, ip: str) -> tuple[bool, int]:
     try:
         redis_client = aioredis.from_url(settings.REDIS_URL)
-        val = await redis_client.get(f"login_failures:{username}")
+        # Check IP block
+        ip_fail = await redis_client.get(f"login_fail_ip:{ip}")
+        if ip_fail and int(ip_fail) >= 15:
+            ttl = await redis_client.ttl(f"login_fail_ip:{ip}")
+            await redis_client.aclose()
+            return True, max(1, ttl)
+            
+        # Check User+IP block
+        user_ip_fail = await redis_client.get(f"login_fail_user_ip:{username}:{ip}")
+        if user_ip_fail and int(user_ip_fail) >= 5:
+            ttl = await redis_client.ttl(f"login_fail_user_ip:{username}:{ip}")
+            await redis_client.aclose()
+            return True, max(1, ttl)
+            
+        # Check Global User block
+        global_fail = await redis_client.get(f"login_fail_user_global:{username}")
+        if global_fail and int(global_fail) >= 50:
+            ttl = await redis_client.ttl(f"login_fail_user_global:{username}")
+            await redis_client.aclose()
+            return True, max(1, ttl)
+            
         await redis_client.aclose()
-        return int(val) if val else 0
+        return False, 0
     except Exception:
-        return 0
+        return False, 0
 
 
-async def increment_login_failures(username: str):
+async def record_login_failure(username: str, ip: str):
     try:
         redis_client = aioredis.from_url(settings.REDIS_URL)
-        key = f"login_failures:{username}"
-        val = await redis_client.incr(key)
-        if val == 1:
-            await redis_client.expire(key, 300)  # 5 minutes
+        
+        # Increment IP failures
+        ip_key = f"login_fail_ip:{ip}"
+        ip_val = await redis_client.incr(ip_key)
+        if ip_val == 1:
+            await redis_client.expire(ip_key, 300)
+            
+        # Increment User+IP failures
+        user_ip_key = f"login_fail_user_ip:{username}:{ip}"
+        user_ip_val = await redis_client.incr(user_ip_key)
+        if user_ip_val == 1:
+            await redis_client.expire(user_ip_key, 300)
+            
+        # Increment Global User failures
+        global_key = f"login_fail_user_global:{username}"
+        global_val = await redis_client.incr(global_key)
+        if global_val == 1:
+            await redis_client.expire(global_key, 300)
+            
         await redis_client.aclose()
     except Exception:
         pass
 
 
-async def reset_login_failures(username: str):
+async def reset_login_failures(username: str, ip: str):
     try:
         redis_client = aioredis.from_url(settings.REDIS_URL)
-        await redis_client.delete(f"login_failures:{username}")
+        await redis_client.delete(f"login_fail_user_ip:{username}:{ip}")
+        await redis_client.delete(f"login_fail_user_global:{username}")
         await redis_client.aclose()
     except Exception:
         pass
@@ -90,23 +126,38 @@ async def is_final_active_admin(user_id: str, db: AsyncSession) -> bool:
 
 @router.post("/login", response_model=Token)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
 ):
-    failures = await get_login_failures(form_data.username)
-    if failures >= 6:
+    username = form_data.username.strip().lower()
+    ip = request.client.host if request.client else "127.0.0.1"
+
+    blocked, retry_after = await check_login_rate_limit(username, ip)
+    if blocked:
         raise HTTPException(
             status_code=429,
-            detail="Túl sok sikertelen bejelentkezési kísérlet. Kérjük várjon 5 percet!",
+            detail="Túl sok sikertelen bejelentkezési kísérlet. Kérjük várjon!",
+            headers={"Retry-After": str(retry_after)}
         )
 
-    if failures >= 3:
-        delay = min(10, 2 * (failures - 2))
+    # Calculate artificial delay BEFORE querying database to avoid holding transactions open
+    try:
+        redis_client = aioredis.from_url(settings.REDIS_URL)
+        user_ip_fail = await redis_client.get(f"login_fail_user_ip:{username}:{ip}")
+        failures = int(user_ip_fail) if user_ip_fail else 0
+        await redis_client.aclose()
+    except Exception:
+        failures = 0
+
+    if failures >= 2:
+        delay = min(10, 2 * (failures - 1))
         await asyncio.sleep(delay)
 
     result = await db.execute(select(User).where(User.username == form_data.username))
     user = result.scalar_one_or_none()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        await increment_login_failures(form_data.username)
+        await record_login_failure(username, ip)
         await log_audit(
             db,
             None,
@@ -122,7 +173,7 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inaktív felhasználó")
 
-    await reset_login_failures(form_data.username)
+    await reset_login_failures(username, ip)
     access_token = create_access_token(data={"sub": user.username})
     await log_audit(db, user.id, user.username, "Sikeres bejelentkezés")
     await db.commit()

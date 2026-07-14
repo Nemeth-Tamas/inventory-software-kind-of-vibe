@@ -252,3 +252,96 @@ async def test_auth_hardening_endpoints():
                 )
             )
             await session.commit()
+
+
+from datetime import timedelta
+import redis.asyncio as aioredis
+from config import settings
+from auth import create_access_token
+
+@pytest.mark.anyio
+async def test_auth_hardened_features():
+    # Setup temp user
+    async with AsyncSessionLocal() as session:
+        # Pre-cleanup
+        await session.execute(delete(AuditLog).where(AuditLog.username == "auth_temp"))
+        await session.execute(delete(User).where(User.username == "auth_temp"))
+        await session.commit()
+        
+        user = User(
+            username="auth_temp",
+            hashed_password=get_password_hash("securePass123!"),
+            role=UserRole.SALES,
+            is_active=True,
+            must_change_password=False
+        )
+        session.add(user)
+        await session.commit()
+
+    # Reset Redis keys for clean test
+    redis_client = aioredis.from_url(settings.REDIS_URL)
+    await redis_client.delete("login_fail_ip:127.0.0.1")
+    await redis_client.delete("login_fail_user_ip:auth_temp:127.0.0.1")
+    await redis_client.delete("login_fail_user_global:auth_temp")
+    await redis_client.aclose()
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver/api"
+        ) as client:
+            # 1. Test token expiry
+            expired_token = create_access_token(
+                data={"sub": "auth_temp"},
+                expires_delta=timedelta(seconds=-10)
+            )
+            expired_headers = {"Authorization": f"Bearer {expired_token}"}
+            me_resp = await client.get("/auth/me", headers=expired_headers)
+            assert me_resp.status_code == 401
+            assert me_resp.json()["detail"] == "Nem sikerült érvényesíteni a hitelesítő adatokat"
+
+            # 2. Test login throttling (5 failures allowed, 6th blocked with 429)
+            for i in range(5):
+                login_resp = await client.post(
+                    "/auth/login",
+                    data={"username": "auth_temp", "password": "wrongpassword123"}
+                )
+                assert login_resp.status_code == 401
+
+            # 6th login attempt should return 429 Too Many Requests
+            throttle_resp = await client.post(
+                "/auth/login",
+                data={"username": "auth_temp", "password": "wrongpassword123"}
+            )
+            assert throttle_resp.status_code == 429
+            assert "Retry-After" in throttle_resp.headers
+            assert int(throttle_resp.headers["Retry-After"]) > 0
+
+            # 3. Verify no password values are in audit logs
+            async with AsyncSessionLocal() as session:
+                stmt = select(AuditLog).where(AuditLog.username == "auth_temp")
+                logs = (await session.execute(stmt)).scalars().all()
+                assert len(logs) > 0
+                for log in logs:
+                    assert "wrongpassword123" not in log.action
+                    if log.details:
+                        assert "wrongpassword123" not in log.details
+
+            # 4. Reset failures and test successful login resets throttling
+            redis_client = aioredis.from_url(settings.REDIS_URL)
+            await redis_client.delete("login_fail_ip:127.0.0.1")
+            await redis_client.delete("login_fail_user_ip:auth_temp:127.0.0.1")
+            await redis_client.delete("login_fail_user_global:auth_temp")
+            await redis_client.aclose()
+
+            # Now successful login works
+            success_login = await client.post(
+                "/auth/login",
+                data={"username": "auth_temp", "password": "securePass123!"}
+            )
+            assert success_login.status_code == 200
+
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(AuditLog).where(AuditLog.username == "auth_temp"))
+            await session.execute(delete(User).where(User.username == "auth_temp"))
+            await session.commit()
