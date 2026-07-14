@@ -2,7 +2,6 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from '../App';
 import Valuation from '../components/Valuation/Valuation';
-import Login from '../components/Auth/Login';
 
 // Mock canvas-confetti
 vi.mock('canvas-confetti', () => ({
@@ -10,20 +9,19 @@ vi.mock('canvas-confetti', () => ({
 }));
 
 // Mock Audio Context / playBeep
-const mockPlayBeep = vi.fn();
 
 describe('Frontend Regression Tests', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     // Clear localStorage
     localStorage.clear();
-    // Mock global fetch
-    global.fetch = vi.fn();
+    // Mock window fetch
+    window.fetch = vi.fn();
     // Mock window.location
     delete (window as any).location;
     window.location = { href: '' } as any;
-    // Mock global EventSource as constructible class
-    global.EventSource = class {
+    // Mock window EventSource as constructible class
+    (window as any).EventSource = class {
       close = vi.fn();
       addEventListener = vi.fn();
       removeEventListener = vi.fn();
@@ -44,7 +42,7 @@ describe('Frontend Regression Tests', () => {
     };
 
     // Mock fetch for Login + fetchData (categories, locations, suppliers, products, stocktakes, movements)
-    (global.fetch as any).mockImplementation((url: string) => {
+    (window.fetch as any).mockImplementation((url: string) => {
       if (url.includes('/auth/login')) {
         return Promise.resolve({
           ok: true,
@@ -88,7 +86,7 @@ describe('Frontend Regression Tests', () => {
   });
 
   test('Error Display - Shows Hungarian error on failed login', async () => {
-    (global.fetch as any).mockImplementation((url: string) => {
+    (window.fetch as any).mockImplementation((url: string) => {
       if (url.includes('/auth/login')) {
         return Promise.resolve({
           ok: false,
@@ -150,7 +148,7 @@ describe('Frontend Regression Tests', () => {
       total_value_gross: 63500
     };
 
-    (global.fetch as any).mockResolvedValue({
+    (window.fetch as any).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockValuationData)
     });
