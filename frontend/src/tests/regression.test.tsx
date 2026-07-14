@@ -77,12 +77,15 @@ describe('Frontend Regression Tests', () => {
     fireEvent.change(passwordInput, { target: { value: 'securePass1!' } });
     fireEvent.click(loginButton);
 
-    // Wait for App to transit to logged-in state
+    // Wait for App to transition to logged-in state (nav renders once token is set)
     await waitFor(() => {
       expect(screen.getByText('Áttekintés')).toBeInTheDocument();
     });
-    
-    expect(screen.getByText('admin_test')).toBeInTheDocument();
+
+    // Username is rendered after /auth/me resolves — wait for it separately
+    await waitFor(() => {
+      expect(screen.getByText('admin_test')).toBeInTheDocument();
+    });
   });
 
   test('Error Display - Shows Hungarian error on failed login', async () => {
