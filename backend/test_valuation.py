@@ -7,21 +7,32 @@ from models_inventory import InventoryMovement, MovementType
 from sqlalchemy import select, delete
 from auth import create_access_token, get_password_hash
 
+
 @pytest.mark.anyio
 async def test_inventory_valuation_flow():
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         # Pre-cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(Product).where(Product.barcode.in_(["888111", "888112"])))
-            await session.execute(delete(Category).where(Category.name == "Valuation Cat"))
-            await session.execute(delete(Location).where(Location.name == "Valuation Loc"))
+            await session.execute(
+                delete(Product).where(Product.barcode.in_(["888111", "888112"]))
+            )
+            await session.execute(
+                delete(Category).where(Category.name == "Valuation Cat")
+            )
+            await session.execute(
+                delete(Location).where(Location.name == "Valuation Loc")
+            )
             await session.commit()
 
         # Setup test master data
         async with AsyncSessionLocal() as session:
             # Ensure admin user exists and does not have must_change_password set,
             # which would cause 412 on all protected endpoints.
-            admin_result = await session.execute(select(User).where(User.username == "admin"))
+            admin_result = await session.execute(
+                select(User).where(User.username == "admin")
+            )
             admin = admin_result.scalars().first()
             if not admin:
                 admin = User(
@@ -50,7 +61,7 @@ async def test_inventory_valuation_flow():
                 default_location_id=loc.id,
                 current_stock=10,
                 purchase_price_net=1000,
-                purchase_price_gross=0
+                purchase_price_gross=0,
             )
 
             # Product 2: both prices 0 (should trigger warning)
@@ -61,7 +72,7 @@ async def test_inventory_valuation_flow():
                 default_location_id=loc.id,
                 current_stock=5,
                 purchase_price_net=0,
-                purchase_price_gross=0
+                purchase_price_gross=0,
             )
 
             session.add_all([p1, p2])
@@ -77,25 +88,27 @@ async def test_inventory_valuation_flow():
         res = await client.get("/api/inventory/valuation", headers=headers)
         assert res.status_code == 200
         data = res.json()
-        
+
         # Verify our products are present in items
         items = data["items"]
         matching_p1 = [i for i in items if i["product_name"] == "Valuation Prod 1"]
         matching_p2 = [i for i in items if i["product_name"] == "Valuation Prod 2"]
-        
+
         assert len(matching_p1) == 1
         assert len(matching_p2) == 1
-        
+
         # Verify gross auto-calculation
         assert matching_p1[0]["purchase_price_gross"] == 1270
         assert matching_p1[0]["total_value_gross"] == 12700
-        
+
         # Verify warning flag
         assert matching_p1[0]["price_warning"] is False
         assert matching_p2[0]["price_warning"] is True
 
         # 2. Get Valuation with category filter
-        res_cat = await client.get(f"/api/inventory/valuation?category_id={cat_id}", headers=headers)
+        res_cat = await client.get(
+            f"/api/inventory/valuation?category_id={cat_id}", headers=headers
+        )
         assert res_cat.status_code == 200
         data_cat = res_cat.json()
         assert len(data_cat["items"]) == 2
@@ -103,32 +116,43 @@ async def test_inventory_valuation_flow():
         assert data_cat["total_value_net"] == 10 * 1000 + 5 * 0
 
         # 3. Get Valuation with location filter
-        res_loc = await client.get(f"/api/inventory/valuation?location_id={loc_id}", headers=headers)
+        res_loc = await client.get(
+            f"/api/inventory/valuation?location_id={loc_id}", headers=headers
+        )
         assert res_loc.status_code == 200
         data_loc = res_loc.json()
         assert len(data_loc["items"]) == 2
 
         # 4. Test Excel Export
-        res_excel = await client.get(f"/api/excel/export/valuation?category_id={cat_id}&location_id={loc_id}")
+        res_excel = await client.get(
+            f"/api/excel/export/valuation?category_id={cat_id}&location_id={loc_id}"
+        )
         assert res_excel.status_code == 200
         assert "spreadsheetml.sheet" in res_excel.headers["content-type"]
         assert "keszletertek.xlsx" in res_excel.headers["content-disposition"]
 
         # Cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(Product).where(Product.barcode.in_(["888111", "888112"])))
+            await session.execute(
+                delete(Product).where(Product.barcode.in_(["888111", "888112"]))
+            )
             await session.execute(delete(Category).where(Category.id == cat_id))
             await session.execute(delete(Location).where(Location.id == loc_id))
             await session.commit()
 
 
-
 @pytest.mark.anyio
 async def test_product_movements_endpoint():
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         # Pre-cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(InventoryMovement).where(InventoryMovement.reason == "Test Movement Reason"))
+            await session.execute(
+                delete(InventoryMovement).where(
+                    InventoryMovement.reason == "Test Movement Reason"
+                )
+            )
             await session.execute(delete(Product).where(Product.barcode == "888113"))
             await session.commit()
 
@@ -139,14 +163,14 @@ async def test_product_movements_endpoint():
                 name="Movement Test Prod",
                 current_stock=15,
                 purchase_price_net=500,
-                purchase_price_gross=635
+                purchase_price_gross=635,
             )
             session.add(p)
             await session.commit()
             await session.refresh(p)
-            
+
             p_id = p.id
-            
+
             m = InventoryMovement(
                 product_id=p_id,
                 quantity_delta=5,
@@ -154,7 +178,7 @@ async def test_product_movements_endpoint():
                 stock_after=15,
                 movement_type=MovementType.RECEIPT,
                 reason="Test Movement Reason",
-                price_net=500
+                price_net=500,
             )
             session.add(m)
             await session.commit()
@@ -173,23 +197,35 @@ async def test_product_movements_endpoint():
         assert movements[0]["price_net"] == 500
 
         # Query non-existent product movements
-        res_fail = await client.get("/api/products/non-existent-product-id-123/movements", headers=headers)
+        res_fail = await client.get(
+            "/api/products/non-existent-product-id-123/movements", headers=headers
+        )
         assert res_fail.status_code == 404
 
         # Cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(InventoryMovement).where(InventoryMovement.product_id == p_id))
+            await session.execute(
+                delete(InventoryMovement).where(InventoryMovement.product_id == p_id)
+            )
             await session.execute(delete(Product).where(Product.id == p_id))
             await session.commit()
 
 
 @pytest.mark.anyio
 async def test_stock_consistency_endpoints():
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         # Pre-cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(InventoryMovement).where(InventoryMovement.reason == "Test Consistency"))
-            await session.execute(delete(Product).where(Product.barcode.in_(["888201", "888202"])))
+            await session.execute(
+                delete(InventoryMovement).where(
+                    InventoryMovement.reason == "Test Consistency"
+                )
+            )
+            await session.execute(
+                delete(Product).where(Product.barcode.in_(["888201", "888202"]))
+            )
             await session.commit()
 
         # Setup test data:
@@ -198,29 +234,29 @@ async def test_stock_consistency_endpoints():
                 barcode="888201",
                 name="Consistency Prod 1",
                 current_stock=10,
-                allow_negative_stock=False
+                allow_negative_stock=False,
             )
             p2 = Product(
                 barcode="888202",
                 name="Consistency Prod 2",
                 current_stock=-5,
-                allow_negative_stock=False
+                allow_negative_stock=False,
             )
             session.add_all([p1, p2])
             await session.commit()
             await session.refresh(p1)
             await session.refresh(p2)
-            
+
             p1_id = p1.id
             p2_id = p2.id
-            
+
             m1 = InventoryMovement(
                 product_id=p1_id,
                 quantity_delta=5,
                 stock_before=0,
                 stock_after=5,
                 movement_type=MovementType.RECEIPT,
-                reason="Test Consistency"
+                reason="Test Consistency",
             )
             session.add(m1)
             await session.commit()
@@ -233,7 +269,7 @@ async def test_stock_consistency_endpoints():
         assert res.status_code == 200
         report = res.json()
         assert report["has_issues"] is True
-        
+
         discrepancies = report["discrepancies"]
         types = [d["type"] for d in discrepancies]
         assert "stock_mismatch" in types
@@ -247,6 +283,10 @@ async def test_stock_consistency_endpoints():
 
         # Cleanup
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(InventoryMovement).where(InventoryMovement.product_id.in_([p1_id, p2_id])))
+            await session.execute(
+                delete(InventoryMovement).where(
+                    InventoryMovement.product_id.in_([p1_id, p2_id])
+                )
+            )
             await session.execute(delete(Product).where(Product.id.in_([p1_id, p2_id])))
             await session.commit()

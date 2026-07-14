@@ -723,66 +723,69 @@ async def get_valuation(
     category_id: Optional[str] = None,
     location_id: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     stmt = select(Product).where(Product.is_archived.is_(False))
     if category_id:
         stmt = stmt.where(Product.category_id == category_id)
     if location_id:
         stmt = stmt.where(Product.default_location_id == location_id)
-        
+
     stmt = stmt.options(
-        selectinload(Product.category),
-        selectinload(Product.default_location)
+        selectinload(Product.category), selectinload(Product.default_location)
     )
-    
+
     result = await db.execute(stmt)
     products = result.scalars().all()
-    
+
     items = []
     total_stock = 0
     total_value_net = 0
     total_value_gross = 0
-    
+
     for p in products:
         stock = p.current_stock or 0
         price_net = p.purchase_price_net or 0
         price_gross = p.purchase_price_gross or 0
-        
+
         # If one of the prices is 0, estimate it
         if price_net > 0 and price_gross == 0:
             price_gross = int(price_net * 1.27)
         elif price_gross > 0 and price_net == 0:
             price_net = int(price_gross / 1.27)
-            
+
         tot_net = stock * price_net
         tot_gross = stock * price_gross
-        
+
         price_warning = (price_net <= 0) or (price_gross <= 0)
-        
-        items.append(ValuationItem(
-            product_id=p.id,
-            product_name=p.name,
-            sku=p.sku,
-            category_name=p.category.name if p.category else "Nincs kategória",
-            current_stock=stock,
-            purchase_price_net=price_net,
-            purchase_price_gross=price_gross,
-            total_value_net=tot_net,
-            total_value_gross=tot_gross,
-            location_name=p.default_location.name if p.default_location else "Nincs helyszín",
-            price_warning=price_warning
-        ))
-        
+
+        items.append(
+            ValuationItem(
+                product_id=p.id,
+                product_name=p.name,
+                sku=p.sku,
+                category_name=p.category.name if p.category else "Nincs kategória",
+                current_stock=stock,
+                purchase_price_net=price_net,
+                purchase_price_gross=price_gross,
+                total_value_net=tot_net,
+                total_value_gross=tot_gross,
+                location_name=p.default_location.name
+                if p.default_location
+                else "Nincs helyszín",
+                price_warning=price_warning,
+            )
+        )
+
         total_stock += stock
         total_value_net += tot_net
         total_value_gross += tot_gross
-        
+
     return ValuationResponse(
         items=items,
         total_stock=total_stock,
         total_value_net=total_value_net,
-        total_value_gross=total_value_gross
+        total_value_gross=total_value_gross,
     )
 
 
@@ -804,66 +807,70 @@ class ConsistencyReport(BaseModel):
 
 @router.get("/consistency", response_model=ConsistencyReport)
 async def get_stock_consistency(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     prod_stmt = select(Product)
     res = await db.execute(prod_stmt)
     products = res.scalars().all()
-    
+
     mv_stmt = select(
         InventoryMovement.product_id,
-        func.sum(InventoryMovement.quantity_delta).label("total_delta")
+        func.sum(InventoryMovement.quantity_delta).label("total_delta"),
     ).group_by(InventoryMovement.product_id)
     mv_res = await db.execute(mv_stmt)
     movements_sum = {r[0]: r[1] for r in mv_res.all()}
-    
+
     discrepancies = []
-    
+
     for p in products:
         expected = movements_sum.get(p.id, 0)
         current = p.current_stock or 0
-        
+
         # Check 1: Stock mismatch
         if not p.is_archived and current != expected:
-            discrepancies.append(ConsistencyDiscrepancy(
-                product_id=p.id,
-                product_name=p.name,
-                barcode=p.barcode,
-                sku=p.sku,
-                type="stock_mismatch",
-                details=f"Készlet eltérés: a terméktáblában {current} db szerepel, de a mozgások összege {expected} db.",
-                current_stock=current,
-                expected_stock=expected
-            ))
-            
+            discrepancies.append(
+                ConsistencyDiscrepancy(
+                    product_id=p.id,
+                    product_name=p.name,
+                    barcode=p.barcode,
+                    sku=p.sku,
+                    type="stock_mismatch",
+                    details=f"Készlet eltérés: a terméktáblában {current} db szerepel, de a mozgások összege {expected} db.",
+                    current_stock=current,
+                    expected_stock=expected,
+                )
+            )
+
         # Check 2: Negative stock where not allowed
         if not p.is_archived and current < 0 and not p.allow_negative_stock:
-            discrepancies.append(ConsistencyDiscrepancy(
-                product_id=p.id,
-                product_name=p.name,
-                barcode=p.barcode,
-                sku=p.sku,
-                type="negative_stock",
-                details=f"Negatív készlet: a jelenlegi készlet {current} db, de a negatív készlet nincs engedélyezve a terméknél.",
-                current_stock=current,
-                expected_stock=expected
-            ))
-            
+            discrepancies.append(
+                ConsistencyDiscrepancy(
+                    product_id=p.id,
+                    product_name=p.name,
+                    barcode=p.barcode,
+                    sku=p.sku,
+                    type="negative_stock",
+                    details=f"Negatív készlet: a jelenlegi készlet {current} db, de a negatív készlet nincs engedélyezve a terméknél.",
+                    current_stock=current,
+                    expected_stock=expected,
+                )
+            )
+
         # Check 3: Archived product with non-zero stock
         if p.is_archived and current != 0:
-            discrepancies.append(ConsistencyDiscrepancy(
-                product_id=p.id,
-                product_name=p.name,
-                barcode=p.barcode,
-                sku=p.sku,
-                type="archived_with_stock",
-                details=f"Archivált termék aktív készlettel: a termék archiválva van, de a készlete {current} db.",
-                current_stock=current,
-                expected_stock=expected
-            ))
-            
+            discrepancies.append(
+                ConsistencyDiscrepancy(
+                    product_id=p.id,
+                    product_name=p.name,
+                    barcode=p.barcode,
+                    sku=p.sku,
+                    type="archived_with_stock",
+                    details=f"Archivált termék aktív készlettel: a termék archiválva van, de a készlete {current} db.",
+                    current_stock=current,
+                    expected_stock=expected,
+                )
+            )
+
     return ConsistencyReport(
-        has_issues=len(discrepancies) > 0,
-        discrepancies=discrepancies
+        has_issues=len(discrepancies) > 0, discrepancies=discrepancies
     )

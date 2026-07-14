@@ -257,7 +257,6 @@ async def test_auth_hardening_endpoints():
             await session.commit()
 
 
-
 @pytest.mark.anyio
 async def test_auth_hardened_features():
     # Setup temp user
@@ -266,13 +265,13 @@ async def test_auth_hardened_features():
         await session.execute(delete(AuditLog).where(AuditLog.username == "auth_temp"))
         await session.execute(delete(User).where(User.username == "auth_temp"))
         await session.commit()
-        
+
         user = User(
             username="auth_temp",
             hashed_password=get_password_hash("securePass123!"),
             role=UserRole.SALES,
             is_active=True,
-            must_change_password=False
+            must_change_password=False,
         )
         session.add(user)
         await session.commit()
@@ -290,26 +289,28 @@ async def test_auth_hardened_features():
         ) as client:
             # 1. Test token expiry
             expired_token = create_access_token(
-                data={"sub": "auth_temp"},
-                expires_delta=timedelta(seconds=-10)
+                data={"sub": "auth_temp"}, expires_delta=timedelta(seconds=-10)
             )
             expired_headers = {"Authorization": f"Bearer {expired_token}"}
             me_resp = await client.get("/auth/me", headers=expired_headers)
             assert me_resp.status_code == 401
-            assert me_resp.json()["detail"] == "Nem sikerült érvényesíteni a hitelesítő adatokat"
+            assert (
+                me_resp.json()["detail"]
+                == "Nem sikerült érvényesíteni a hitelesítő adatokat"
+            )
 
             # 2. Test login throttling (5 failures allowed, 6th blocked with 429)
             for i in range(5):
                 login_resp = await client.post(
                     "/auth/login",
-                    data={"username": "auth_temp", "password": "wrongpassword123"}
+                    data={"username": "auth_temp", "password": "wrongpassword123"},
                 )
                 assert login_resp.status_code == 401
 
             # 6th login attempt should return 429 Too Many Requests
             throttle_resp = await client.post(
                 "/auth/login",
-                data={"username": "auth_temp", "password": "wrongpassword123"}
+                data={"username": "auth_temp", "password": "wrongpassword123"},
             )
             assert throttle_resp.status_code == 429
             assert "Retry-After" in throttle_resp.headers
@@ -335,12 +336,14 @@ async def test_auth_hardened_features():
             # Now successful login works
             success_login = await client.post(
                 "/auth/login",
-                data={"username": "auth_temp", "password": "securePass123!"}
+                data={"username": "auth_temp", "password": "securePass123!"},
             )
             assert success_login.status_code == 200
 
     finally:
         async with AsyncSessionLocal() as session:
-            await session.execute(delete(AuditLog).where(AuditLog.username == "auth_temp"))
+            await session.execute(
+                delete(AuditLog).where(AuditLog.username == "auth_temp")
+            )
             await session.execute(delete(User).where(User.username == "auth_temp"))
             await session.commit()

@@ -30,21 +30,21 @@ async def check_login_rate_limit(username: str, ip: str) -> tuple[bool, int]:
             ttl = await redis_client.ttl(f"login_fail_ip:{ip}")
             await redis_client.aclose()
             return True, max(1, ttl)
-            
+
         # Check User+IP block
         user_ip_fail = await redis_client.get(f"login_fail_user_ip:{username}:{ip}")
         if user_ip_fail and int(user_ip_fail) >= 5:
             ttl = await redis_client.ttl(f"login_fail_user_ip:{username}:{ip}")
             await redis_client.aclose()
             return True, max(1, ttl)
-            
+
         # Check Global User block
         global_fail = await redis_client.get(f"login_fail_user_global:{username}")
         if global_fail and int(global_fail) >= 50:
             ttl = await redis_client.ttl(f"login_fail_user_global:{username}")
             await redis_client.aclose()
             return True, max(1, ttl)
-            
+
         await redis_client.aclose()
         return False, 0
     except Exception:
@@ -54,25 +54,25 @@ async def check_login_rate_limit(username: str, ip: str) -> tuple[bool, int]:
 async def record_login_failure(username: str, ip: str):
     try:
         redis_client = aioredis.from_url(settings.REDIS_URL)
-        
+
         # Increment IP failures
         ip_key = f"login_fail_ip:{ip}"
         ip_val = await redis_client.incr(ip_key)
         if ip_val == 1:
             await redis_client.expire(ip_key, 300)
-            
+
         # Increment User+IP failures
         user_ip_key = f"login_fail_user_ip:{username}:{ip}"
         user_ip_val = await redis_client.incr(user_ip_key)
         if user_ip_val == 1:
             await redis_client.expire(user_ip_key, 300)
-            
+
         # Increment Global User failures
         global_key = f"login_fail_user_global:{username}"
         global_val = await redis_client.incr(global_key)
         if global_val == 1:
             await redis_client.expire(global_key, 300)
-            
+
         await redis_client.aclose()
     except Exception:
         pass
@@ -128,7 +128,7 @@ async def is_final_active_admin(user_id: str, db: AsyncSession) -> bool:
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     username = form_data.username.strip().lower()
     ip = request.client.host if request.client else "127.0.0.1"
@@ -138,7 +138,7 @@ async def login(
         raise HTTPException(
             status_code=429,
             detail="Túl sok sikertelen bejelentkezési kísérlet. Kérjük várjon!",
-            headers={"Retry-After": str(retry_after)}
+            headers={"Retry-After": str(retry_after)},
         )
 
     # Calculate artificial delay BEFORE querying database to avoid holding transactions open

@@ -43,7 +43,7 @@ async def seed_development_data(
         # Get Suppliers, creating demo ones if missing
         for name, email, phone, address in [
             ("HRP Hungary Kft", "info@hrp.hu", "+3614524600", "Budapest"),
-            ("Expert Zrt", "info@expert.hu", "+3614524700", "Debrecen")
+            ("Expert Zrt", "info@expert.hu", "+3614524700", "Debrecen"),
         ]:
             check_sup = await db.execute(select(Supplier).where(Supplier.name == name))
             if not check_sup.scalars().first():

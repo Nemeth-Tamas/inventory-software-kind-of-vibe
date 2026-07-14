@@ -585,7 +585,17 @@ class MovementTimelineItem(BaseModel):
 async def get_product_movements(
     product_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.LEADER, UserRole.WAREHOUSE, UserRole.SALES, UserRole.VIEWER]))
+    current_user: User = Depends(
+        require_role(
+            [
+                UserRole.ADMIN,
+                UserRole.LEADER,
+                UserRole.WAREHOUSE,
+                UserRole.SALES,
+                UserRole.VIEWER,
+            ]
+        )
+    ),
 ):
     p_res = await db.execute(select(Product).where(Product.id == product_id))
     if not p_res.scalar_one_or_none():
@@ -599,7 +609,7 @@ async def get_product_movements(
             selectinload(InventoryMovement.user),
             selectinload(InventoryMovement.source_location),
             selectinload(InventoryMovement.destination_location),
-            selectinload(InventoryMovement.supplier)
+            selectinload(InventoryMovement.supplier),
         )
     )
     res = await db.execute(stmt)
@@ -607,7 +617,11 @@ async def get_product_movements(
 
     items = []
     for m in movements:
-        mv_type_val = m.movement_type.value if hasattr(m.movement_type, "value") else str(m.movement_type)
+        mv_type_val = (
+            m.movement_type.value
+            if hasattr(m.movement_type, "value")
+            else str(m.movement_type)
+        )
         items.append(
             MovementTimelineItem(
                 id=m.id,
@@ -617,13 +631,15 @@ async def get_product_movements(
                 stock_before=m.stock_before,
                 stock_after=m.stock_after,
                 source_location=m.source_location.name if m.source_location else None,
-                destination_location=m.destination_location.name if m.destination_location else None,
+                destination_location=m.destination_location.name
+                if m.destination_location
+                else None,
                 supplier_name=m.supplier.name if m.supplier else None,
                 price_net=m.price_net,
                 user_name=m.user.username if m.user else "Rendszer",
                 reason=m.reason,
                 reference_number=m.reference_number,
-                note=m.note
+                note=m.note,
             )
         )
     return items

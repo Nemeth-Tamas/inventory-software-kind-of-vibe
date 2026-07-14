@@ -170,15 +170,15 @@ async def merge_categories_preview(
         raise HTTPException(
             status_code=404, detail="Forrás vagy cél kategória nem található"
         )
-    
+
     count_stmt = select(func.count(Product.id)).where(Product.category_id == source_id)
     count_res = await db.execute(count_stmt)
     count = count_res.scalar_one()
-    
+
     return {
         "source_name": source.name,
         "target_name": target.name,
-        "product_count": count
+        "product_count": count,
     }
 
 
@@ -202,9 +202,11 @@ async def merge_categories(
         raise HTTPException(
             status_code=404, detail="Forrás vagy cél kategória nem található"
         )
-    
+
     # Get count of affected products
-    count_stmt = select(func.count(Product.id)).where(Product.category_id == req.source_id)
+    count_stmt = select(func.count(Product.id)).where(
+        Product.category_id == req.source_id
+    )
     count_res = await db.execute(count_stmt)
     count = count_res.scalar_one()
 
@@ -214,10 +216,10 @@ async def merge_categories(
         .where(Product.category_id == req.source_id)
         .values(category_id=req.target_id)
     )
-    
+
     # Delete the source category
     await db.delete(source)
-    
+
     # Audit log the operation
     await log_audit(
         db,

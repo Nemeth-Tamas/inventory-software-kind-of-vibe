@@ -28,7 +28,9 @@ logger.setLevel(logging.INFO)
 if logger.handlers:
     logger.handlers.clear()
 handler = logging.StreamHandler()
-formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [CID:%(correlation_id)s] %(message)s")
+formatter = logging.Formatter(
+    "[%(asctime)s] [%(levelname)s] [CID:%(correlation_id)s] %(message)s"
+)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
@@ -44,12 +46,12 @@ class CorrelationIdAdapter(logging.LoggerAdapter):
 async def add_correlation_id(request: Request, call_next):
     correlation_id = request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
     request.state.correlation_id = correlation_id
-    
+
     request_logger = CorrelationIdAdapter(logger, {"correlation_id": correlation_id})
     request.state.logger = request_logger
-    
+
     request_logger.info(f"Kérés indult: {request.method} {request.url.path}")
-    
+
     try:
         response: Response = await call_next(request)
         response.headers["X-Correlation-ID"] = correlation_id
@@ -57,7 +59,7 @@ async def add_correlation_id(request: Request, call_next):
         return response
     except SQLAlchemyError as exc:
         request_logger.error(f"Adatbázis hiba történt: {str(exc)}", exc_info=True)
-        
+
         exc_str = str(exc).lower()
         if "foreign key" in exc_str or "foreignkey" in exc_str:
             detail = "A művelet nem hajtható végre, mert a rekordhoz kapcsolódó más adatok is léteznek."
@@ -68,32 +70,30 @@ async def add_correlation_id(request: Request, call_next):
         else:
             detail = "Belső adatbázis hiba történt. Kérjük, próbálja meg később."
             status_code = 500
-            
+
         return JSONResponse(
             status_code=status_code,
-            content={
-                "detail": detail,
-                "correlation_id": correlation_id
-            },
-            headers={"X-Correlation-ID": correlation_id}
+            content={"detail": detail, "correlation_id": correlation_id},
+            headers={"X-Correlation-ID": correlation_id},
         )
     except Exception as exc:
         if isinstance(exc, HTTPException):
             return JSONResponse(
                 status_code=exc.status_code,
                 content={"detail": exc.detail},
-                headers={"X-Correlation-ID": correlation_id}
+                headers={"X-Correlation-ID": correlation_id},
             )
-            
+
         request_logger.error(f"Váratlan hiba történt: {str(exc)}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={
                 "detail": "Belső szerverhiba történt. Kérjük, próbálja meg később.",
-                "correlation_id": correlation_id
+                "correlation_id": correlation_id,
             },
-            headers={"X-Correlation-ID": correlation_id}
+            headers={"X-Correlation-ID": correlation_id},
         )
+
 
 # CORS middleware configuration
 origins = []

@@ -7,19 +7,27 @@ from fastapi import APIRouter
 # Register temporary test routes to trigger errors cleanly
 router = APIRouter(prefix="/api/test-errors", tags=["test-errors"])
 
+
 @router.get("/db-error")
 async def trigger_db_error():
-    raise SQLAlchemyError("Mock unique constraint violation error details: KEY (sku)=(TEST1234) already exists.")
+    raise SQLAlchemyError(
+        "Mock unique constraint violation error details: KEY (sku)=(TEST1234) already exists."
+    )
+
 
 @router.get("/generic-error")
 async def trigger_generic_error():
     raise Exception("Critical raw python error trace that should not leak!")
 
+
 app.include_router(router)
+
 
 @pytest.mark.anyio
 async def test_correlation_id_and_error_handling():
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         # 1. Verify successful request propagates correlation ID header
         res = await client.get("/api/health")
         assert res.status_code == 200
@@ -29,7 +37,9 @@ async def test_correlation_id_and_error_handling():
 
         # 2. Verify custom incoming correlation ID is propagated back
         custom_cid = "custom-correlation-12345"
-        res_custom = await client.get("/api/health", headers={"X-Correlation-ID": custom_cid})
+        res_custom = await client.get(
+            "/api/health", headers={"X-Correlation-ID": custom_cid}
+        )
         assert res_custom.status_code == 200
         assert res_custom.headers["X-Correlation-ID"] == custom_cid
 
