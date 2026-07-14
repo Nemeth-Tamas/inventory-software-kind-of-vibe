@@ -3,6 +3,7 @@ import httpx
 from main import app
 from database import AsyncSessionLocal
 from models import Category, Location, Product, User, UserRole
+from models_inventory import InventoryMovement, MovementType
 from sqlalchemy import select, delete
 from auth import create_access_token, get_password_hash
 
@@ -18,17 +19,21 @@ async def test_inventory_valuation_flow():
 
         # Setup test master data
         async with AsyncSessionLocal() as session:
-            # Create user
-            admin_user = await session.execute(select(User).where(User.username == "admin"))
-            if not admin_user.scalars().first():
+            # Ensure admin user exists and does not have must_change_password set,
+            # which would cause 412 on all protected endpoints.
+            admin_result = await session.execute(select(User).where(User.username == "admin"))
+            admin = admin_result.scalars().first()
+            if not admin:
                 admin = User(
                     username="admin",
                     hashed_password=get_password_hash("admin123"),
                     role=UserRole.ADMIN,
                     is_active=True,
-                    must_change_password=False
+                    must_change_password=False,
                 )
                 session.add(admin)
+            else:
+                admin.must_change_password = False
 
             cat = Category(name="Valuation Cat")
             loc = Location(name="Valuation Loc")
@@ -117,7 +122,6 @@ async def test_inventory_valuation_flow():
             await session.commit()
 
 
-from models_inventory import InventoryMovement, MovementType
 
 @pytest.mark.anyio
 async def test_product_movements_endpoint():

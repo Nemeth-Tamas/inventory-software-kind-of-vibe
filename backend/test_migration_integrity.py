@@ -3,7 +3,7 @@ import re
 import sys
 import subprocess
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from config import settings
 from models import Base

@@ -1,9 +1,12 @@
 import pytest
 import httpx
+from datetime import timedelta
+import redis.asyncio as aioredis
 from main import app
 from database import AsyncSessionLocal
 from models import User, UserRole, AuditLog
-from auth import get_password_hash
+from auth import get_password_hash, create_access_token
+from config import settings
 from sqlalchemy import delete, select
 from routers.auth import validate_password_strength
 from fastapi import HTTPException
@@ -254,10 +257,6 @@ async def test_auth_hardening_endpoints():
             await session.commit()
 
 
-from datetime import timedelta
-import redis.asyncio as aioredis
-from config import settings
-from auth import create_access_token
 
 @pytest.mark.anyio
 async def test_auth_hardened_features():

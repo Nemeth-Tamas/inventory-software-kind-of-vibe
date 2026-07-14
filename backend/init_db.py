@@ -1,5 +1,5 @@
 import asyncio
-from models import User, UserRole, Category, Supplier, Location
+from models import User, UserRole, Category, Location
 from database import AsyncSessionLocal
 from auth import get_password_hash
 from sqlalchemy import select
@@ -22,16 +22,22 @@ async def init_database():
                 f"Initial admin setup skipped: An administrator already exists (e.g. '{existing_admin.username}')."
             )
         else:
+            # Only force a password change in production where the seeded
+            # password may still be the operator-chosen value.  In
+            # development / CI, forcing this blocks every authenticated test
+            # request with a 412 Precondition-Failed.
+            force_change = settings.APP_ENV == "production"
             admin = User(
                 username=admin_username,
                 hashed_password=get_password_hash(admin_password),
                 role=UserRole.ADMIN,
                 is_active=True,
-                must_change_password=True,  # Force change on first login for safety
+                must_change_password=force_change,
             )
             session.add(admin)
             print(
-                f"Initial admin user '{admin_username}' created successfully. Password change forced on next login."
+                f"Initial admin user '{admin_username}' created successfully."
+                + (" Password change forced on next login." if force_change else "")
             )
 
         # Create default locations if empty

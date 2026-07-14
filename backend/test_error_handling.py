@@ -2,9 +2,7 @@ import pytest
 import httpx
 from main import app
 from sqlalchemy.exc import SQLAlchemyError
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from database import get_db
+from fastapi import APIRouter
 
 # Register temporary test routes to trigger errors cleanly
 router = APIRouter(prefix="/api/test-errors", tags=["test-errors"])

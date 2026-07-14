@@ -38,28 +38,34 @@ async def test_category_merge_flow():
         # Setup test categories, products, and users
         async with AsyncSessionLocal() as session:
             # Create users
-            admin_user = await session.execute(select(User).where(User.username == "admin"))
-            if not admin_user.scalars().first():
+            admin_result = await session.execute(select(User).where(User.username == "admin"))
+            admin = admin_result.scalars().first()
+            if not admin:
                 admin = User(
                     username="admin",
                     hashed_password=get_password_hash("admin123"),
                     role=UserRole.ADMIN,
                     is_active=True,
-                    must_change_password=False
+                    must_change_password=False,
                 )
                 session.add(admin)
-                
-            warehouse_user = await session.execute(select(User).where(User.username == "warehouse"))
-            if not warehouse_user.scalars().first():
+            else:
+                admin.must_change_password = False
+
+            wh_result = await session.execute(select(User).where(User.username == "warehouse"))
+            wh_user = wh_result.scalars().first()
+            if not wh_user:
                 wh = User(
                     username="warehouse",
                     hashed_password=get_password_hash("warehouse123"),
                     role=UserRole.WAREHOUSE,
                     is_active=True,
-                    must_change_password=False
+                    must_change_password=False,
                 )
                 session.add(wh)
-                
+            else:
+                wh_user.must_change_password = False
+
             # Create categories
             source_cat = Category(name="Source Category Test")
             target_cat = Category(name="Target Category Test")
