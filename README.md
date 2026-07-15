@@ -1,5 +1,7 @@
 # Raktárkezelő és Leltár Rendszer (Inventory & Stocktake System)
 
+No longer maintained, as I ran out of motivation and tokens :D
+
 [![CI](https://github.com/Nemeth-Tamas/inventory-software-kind-of-vibe/actions/workflows/ci.yml/badge.svg)](https://github.com/Nemeth-Tamas/inventory-software-kind-of-vibe/actions/workflows/ci.yml)
 
 Aktívan fejlesztett, saját használatra készült raktárkezelő rendszer.
